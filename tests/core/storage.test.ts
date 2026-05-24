@@ -1,5 +1,5 @@
 // tests/core/storage.test.ts
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createChromeMock } from '../setup';
 import {
   getAllBookmarks,
@@ -27,7 +27,11 @@ function makeBookmark(overrides: Partial<Bookmark> = {}): Bookmark {
 
 describe('storage', () => {
   beforeEach(() => {
-    global.chrome = createChromeMock();
+    vi.stubGlobal('chrome', createChromeMock());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it('getAllBookmarks returns empty array when nothing saved', async () => {
