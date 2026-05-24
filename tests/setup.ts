@@ -7,9 +7,14 @@ export function createChromeMock() {
   return {
     storage: {
       local: {
-        get: vi.fn((key: string) =>
-          Promise.resolve({ [key]: store[key] })
-        ),
+        get: vi.fn((keys: string | string[]) => {
+          if (Array.isArray(keys)) {
+            return Promise.resolve(
+              Object.fromEntries(keys.map((k: string) => [k, store[k]]))
+            );
+          }
+          return Promise.resolve({ [keys]: store[keys] });
+        }),
         set: vi.fn((items: Record<string, unknown>) => {
           Object.assign(store, items);
           return Promise.resolve();
