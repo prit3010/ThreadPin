@@ -1,4 +1,5 @@
 // entrypoints/content.ts
+import '../src/styles/content.css';
 import { getAdapter } from '../src/adapters/index';
 import { captureAnchor, createBookmark } from '../src/core/bookmarks';
 import { jumpToBookmark } from '../src/core/matching';

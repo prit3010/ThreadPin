@@ -1,0 +1,275 @@
+/* entrypoints/content.css */
+
+/* ── Design tokens ──────────────────────────────────────── */
+:root {
+  --tp-accent:      #f59e0b;
+  --tp-bg:          #ffffff;
+  --tp-bg-subtle:   #f9fafb;
+  --tp-border:      #e5e7eb;
+  --tp-text:        #111827;
+  --tp-text-muted:  #6b7280;
+  --tp-shadow:      0 4px 12px rgba(0, 0, 0, 0.12);
+  --tp-radius:      8px;
+  --tp-z:           2147483647;
+}
+
+/* ChatGPT adds class="dark" to <html> in dark mode */
+html.dark {
+  --tp-bg:          #1e1e1e;
+  --tp-bg-subtle:   #2a2a2a;
+  --tp-border:      #3a3a3a;
+  --tp-text:        #f3f4f6;
+  --tp-text-muted:  #9ca3af;
+  --tp-shadow:      0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+/* ── Highlight animation ────────────────────────────────── */
+@keyframes threadpin-flash {
+  0% {
+    background-color: rgba(245, 158, 11, 0.35);
+    outline: 2px solid rgba(245, 158, 11, 0.7);
+    outline-offset: 4px;
+  }
+  100% {
+    background-color: transparent;
+    outline: 2px solid transparent;
+    outline-offset: 4px;
+  }
+}
+
+.threadpin-highlight {
+  animation: threadpin-flash 2s ease-out forwards;
+  border-radius: 4px;
+}
+
+/* ── Toast ──────────────────────────────────────────────── */
+.threadpin-toast {
+  position: fixed;
+  bottom: 88px;
+  left: 50%;
+  transform: translateX(-50%) translateY(8px);
+  background: var(--tp-text);
+  color: var(--tp-bg);
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-family: system-ui, -apple-system, sans-serif;
+  z-index: var(--tp-z);
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: none;
+  white-space: nowrap;
+  box-shadow: var(--tp-shadow);
+}
+
+.threadpin-toast--visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ── Bookmark Button ────────────────────────────────────── */
+.threadpin-bookmark-btn {
+  position: fixed;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: var(--tp-z);
+  background: var(--tp-bg);
+  color: var(--tp-text);
+  border: 1px solid var(--tp-border);
+  border-radius: var(--tp-radius);
+  padding: 8px 12px;
+  font-size: 13px;
+  font-family: system-ui, -apple-system, sans-serif;
+  cursor: pointer;
+  box-shadow: var(--tp-shadow);
+  white-space: nowrap;
+  transition: background 0.15s ease;
+}
+
+.threadpin-bookmark-btn:hover {
+  background: var(--tp-bg-subtle);
+}
+
+/* ── Return Button ──────────────────────────────────────── */
+.threadpin-return-btn {
+  position: fixed;
+  right: 16px;
+  top: calc(50% + 52px);
+  z-index: var(--tp-z);
+  background: var(--tp-accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--tp-radius);
+  font-family: system-ui, -apple-system, sans-serif;
+  cursor: pointer;
+  box-shadow: var(--tp-shadow);
+  display: flex;
+  align-items: stretch;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.threadpin-return-btn--hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(8px);
+}
+
+.threadpin-return-btn__label {
+  padding: 8px 10px;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.threadpin-return-btn__dismiss {
+  background: rgba(0, 0, 0, 0.15);
+  border: none;
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 0 var(--tp-radius) var(--tp-radius) 0;
+  color: #fff;
+  padding: 8px 9px;
+  font-size: 15px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.threadpin-return-btn__dismiss:hover {
+  background: rgba(0, 0, 0, 0.28);
+}
+
+/* ── Drawer Tab ─────────────────────────────────────────── */
+.threadpin-drawer-tab {
+  position: fixed;
+  right: 16px;
+  top: calc(50% - 44px);
+  z-index: var(--tp-z);
+  background: var(--tp-bg);
+  color: var(--tp-text);
+  border: 1px solid var(--tp-border);
+  border-radius: var(--tp-radius);
+  padding: 8px 12px;
+  font-size: 13px;
+  font-family: system-ui, -apple-system, sans-serif;
+  cursor: pointer;
+  box-shadow: var(--tp-shadow);
+  white-space: nowrap;
+  transition: background 0.15s ease;
+}
+
+.threadpin-drawer-tab:hover {
+  background: var(--tp-bg-subtle);
+}
+
+/* ── Drawer Panel ───────────────────────────────────────── */
+.threadpin-drawer {
+  position: fixed;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 280px;
+  max-height: 60vh;
+  overflow-y: auto;
+  z-index: var(--tp-z);
+  background: var(--tp-bg);
+  border: 1px solid var(--tp-border);
+  border-radius: var(--tp-radius);
+  box-shadow: var(--tp-shadow);
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+.threadpin-drawer--closed {
+  display: none;
+}
+
+.threadpin-drawer__title {
+  padding: 12px 14px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--tp-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--tp-border);
+}
+
+.threadpin-drawer__list {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.threadpin-drawer__empty {
+  padding: 16px 12px;
+  font-size: 13px;
+  color: var(--tp-text-muted);
+  text-align: center;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.threadpin-drawer__card {
+  background: var(--tp-bg-subtle);
+  border: 1px solid var(--tp-border);
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.threadpin-drawer__card--active {
+  border-color: var(--tp-accent);
+}
+
+.threadpin-drawer__preview {
+  font-size: 13px;
+  color: var(--tp-text);
+  line-height: 1.4;
+  margin: 0 0 6px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.threadpin-drawer__meta {
+  font-size: 11px;
+  color: var(--tp-text-muted);
+  display: block;
+  margin-bottom: 8px;
+}
+
+.threadpin-drawer__actions {
+  display: flex;
+  gap: 6px;
+}
+
+.threadpin-drawer__jump,
+.threadpin-drawer__delete {
+  flex: 1;
+  padding: 5px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  border: 1px solid var(--tp-border);
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+.threadpin-drawer__jump {
+  background: var(--tp-accent);
+  color: #fff;
+  border-color: var(--tp-accent);
+}
+
+.threadpin-drawer__jump:hover {
+  opacity: 0.9;
+}
+
+.threadpin-drawer__delete {
+  background: var(--tp-bg);
+  color: var(--tp-text-muted);
+}
+
+.threadpin-drawer__delete:hover {
+  color: #ef4444;
+  border-color: #ef4444;
+}
