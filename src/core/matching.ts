@@ -5,9 +5,10 @@ export async function jumpToBookmark(
   adapter: Adapter
 ): Promise<boolean> {
   // Strategy 1: find by data-message-id → data-start
-  const messageEl = document.querySelector(
-    `[data-message-id="${bookmark.messageId}"]`
-  );
+  // Guard: skip if messageId is empty (bookmark captured on a non-message element)
+  const messageEl = bookmark.messageId
+    ? document.querySelector(`[data-message-id="${bookmark.messageId}"]`)
+    : null;
 
   if (messageEl) {
     const paragraphEl = messageEl.querySelector(

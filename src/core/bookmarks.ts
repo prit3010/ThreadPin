@@ -5,12 +5,22 @@ export function captureAnchor(adapter: Adapter): AnchorData {
   const selectedText = selection?.toString().trim() || null;
   const viewportCenter = window.innerHeight / 2;
 
-  // Find the message container closest to the viewport center
+  // Find the message container closest to the viewport center.
+  // Only consider containers that are at least partially visible in the
+  // viewport (rect.bottom > 0 && rect.top < innerHeight) so a tall header
+  // above the messages can't steal the "nearest" slot when at the top.
   const containers = Array.from(
     document.querySelectorAll(adapter.getMessageContainerSelector())
   );
 
-  const nearestContainer = containers.reduce<Element | null>(
+  const visibleContainers = containers.filter((el) => {
+    const rect = el.getBoundingClientRect();
+    return rect.bottom > 0 && rect.top < window.innerHeight;
+  });
+
+  const pool = visibleContainers.length > 0 ? visibleContainers : containers;
+
+  const nearestContainer = pool.reduce<Element | null>(
     (nearest, el) => {
       const rect = el.getBoundingClientRect();
       const elCenter = rect.top + rect.height / 2;
