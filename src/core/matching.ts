@@ -14,7 +14,7 @@ export async function jumpToBookmark(
       `[data-start="${bookmark.dataStart}"]`
     );
     const target = (paragraphEl ?? messageEl) as HTMLElement;
-    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    target.scrollIntoView({ behavior: 'instant', block: 'center' });
     flashHighlight(target);
     return true;
   }
@@ -26,7 +26,7 @@ export async function jumpToBookmark(
       adapter.getMessageContainerSelector()
     );
     if (found) {
-      found.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      found.scrollIntoView({ behavior: 'instant', block: 'center' });
       flashHighlight(found);
       return true;
     }
@@ -63,8 +63,36 @@ function findTextInPage(
 }
 
 export function flashHighlight(element: HTMLElement): void {
-  element.classList.add('threadpin-highlight');
-  setTimeout(() => {
-    element.classList.remove('threadpin-highlight');
-  }, 2000);
+  // Use a fixed-position overlay instead of a CSS class so we don't fight
+  // ChatGPT's own element styles (which win on specificity battles).
+  // scrollIntoView must use 'instant' so getBoundingClientRect() is stable
+  // by the time we read it here.
+  const rect = element.getBoundingClientRect();
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = [
+    'position: fixed',
+    `top: ${rect.top - 3}px`,
+    `left: ${rect.left - 3}px`,
+    `width: ${rect.width + 6}px`,
+    `height: ${Math.max(rect.height, 24) + 6}px`,
+    'background: rgba(245, 158, 11, 0.25)',
+    'border: 2px solid rgba(245, 158, 11, 0.75)',
+    'border-radius: 6px',
+    'pointer-events: none',
+    'z-index: 2147483646',
+    'opacity: 1',
+    'transition: opacity 1.8s ease-out',
+  ].join('; ');
+
+  document.body.appendChild(overlay);
+
+  // Trigger fade on the next two frames (one to paint, one to transition)
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      overlay.style.opacity = '0';
+    });
+  });
+
+  setTimeout(() => overlay.remove(), 2200);
 }
