@@ -1,6 +1,15 @@
 // src/components/drawer.ts
 import type { Bookmark } from '../core/types';
 
+function keepMounted(el: HTMLElement): void {
+  const observer = new MutationObserver(() => {
+    if (!document.body.contains(el)) {
+      document.body.appendChild(el);
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: false });
+}
+
 const DRAWER_ID = 'threadpin-drawer';
 const TAB_ID = 'threadpin-drawer-tab';
 
@@ -45,6 +54,7 @@ export function mountDrawer(options: DrawerOptions): DrawerAPI {
   drawer.appendChild(title);
   drawer.appendChild(list);
   document.body.appendChild(drawer);
+  keepMounted(drawer);
 
   // Drawer tab button (opens/closes the panel)
   const tab = document.createElement('button');
@@ -53,6 +63,7 @@ export function mountDrawer(options: DrawerOptions): DrawerAPI {
   tab.setAttribute('aria-label', 'Toggle bookmark drawer');
   tab.textContent = '📌';
   document.body.appendChild(tab);
+  keepMounted(tab);
 
   tab.addEventListener('click', () => {
     isOpen = !isOpen;

@@ -15,10 +15,43 @@ import { mountDrawer } from '../src/components/drawer';
 import { mountReturnButton } from '../src/components/return-button';
 import { showToast } from '../src/components/toast';
 
+// ── Wait for ChatGPT's React app to finish hydrating ─────────────────────
+// ChatGPT (Next.js) replaces document.body content ~2s after the content
+// script runs. We wait for <main> to appear — that's ChatGPT's signal that
+// the app is interactive and won't wipe our appended elements.
+function waitForChatGPT(): Promise<void> {
+  return new Promise((resolve) => {
+    if (document.querySelector('main')) {
+      resolve();
+      return;
+    }
+    const observer = new MutationObserver(() => {
+      if (document.querySelector('main')) {
+        observer.disconnect();
+        resolve();
+      }
+    });
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+  });
+}
+
+// ── Guard: re-append element if ChatGPT ever removes it ──────────────────
+function keepMounted(el: HTMLElement): void {
+  const observer = new MutationObserver(() => {
+    if (!document.body.contains(el)) {
+      document.body.appendChild(el);
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: false });
+}
+
 export default defineContentScript({
   matches: ['https://chatgpt.com/*', 'https://chat.openai.com/*'],
   async main() {
     console.log('[ThreadPin] loaded');
+
+    // Wait for ChatGPT to finish hydrating before mounting any UI
+    await waitForChatGPT();
 
     // ── Mount persistent UI ───────────────────────────────
     const returnBtn = mountReturnButton({

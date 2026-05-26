@@ -1,6 +1,15 @@
 // src/components/return-button.ts
 import type { Bookmark } from '../core/types';
 
+function keepMounted(el: HTMLElement): void {
+  const observer = new MutationObserver(() => {
+    if (!document.body.contains(el)) {
+      document.body.appendChild(el);
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: false });
+}
+
 const BUTTON_ID = 'threadpin-return-btn';
 
 export interface ReturnButtonOptions {
@@ -36,6 +45,7 @@ export function mountReturnButton(
   wrapper.appendChild(label);
   wrapper.appendChild(dismiss);
   document.body.appendChild(wrapper);
+  keepMounted(wrapper);
 
   label.addEventListener('click', () => {
     if (currentBookmark) options.onReturn(currentBookmark);

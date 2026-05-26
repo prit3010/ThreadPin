@@ -2,6 +2,15 @@
 
 const BUTTON_ID = 'threadpin-bookmark-btn';
 
+function keepMounted(el: HTMLElement): void {
+  const observer = new MutationObserver(() => {
+    if (!document.body.contains(el)) {
+      document.body.appendChild(el);
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: false });
+}
+
 export interface BookmarkButtonOptions {
   onClick: () => void;
 }
@@ -25,6 +34,7 @@ export function mountBookmarkButton(
   });
 
   document.body.appendChild(button);
+  keepMounted(button);
 
   // Returns an unmount function
   return () => button.remove();
