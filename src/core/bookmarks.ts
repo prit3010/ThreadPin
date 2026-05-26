@@ -20,19 +20,24 @@ export function captureAnchor(adapter: Adapter): AnchorData {
 
   const pool = visibleContainers.length > 0 ? visibleContainers : containers;
 
+  // Clamp each container's top/bottom to the viewport before computing the
+  // center. This prevents large containers (e.g. a tall code block that
+  // spans the whole viewport) from losing to an off-screen sibling because
+  // their geometric center is far off-screen.
+  function visibleDistanceFromCenter(el: Element): number {
+    const rect = el.getBoundingClientRect();
+    const clampedTop = Math.max(0, rect.top);
+    const clampedBottom = Math.min(window.innerHeight, rect.bottom);
+    const visibleCenter = (clampedTop + clampedBottom) / 2;
+    return Math.abs(visibleCenter - viewportCenter);
+  }
+
   const nearestContainer = pool.reduce<Element | null>(
     (nearest, el) => {
-      const rect = el.getBoundingClientRect();
-      const elCenter = rect.top + rect.height / 2;
-      const distance = Math.abs(elCenter - viewportCenter);
-
       if (!nearest) return el;
-
-      const nearestRect = nearest.getBoundingClientRect();
-      const nearestCenter = nearestRect.top + nearestRect.height / 2;
-      const nearestDistance = Math.abs(nearestCenter - viewportCenter);
-
-      return distance < nearestDistance ? el : nearest;
+      return visibleDistanceFromCenter(el) < visibleDistanceFromCenter(nearest)
+        ? el
+        : nearest;
     },
     null
   );
