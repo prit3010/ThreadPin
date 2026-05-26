@@ -48,6 +48,56 @@ describe('jumpToBookmark', () => {
     expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
   });
 
+  it('uses selected text when the message exists but the saved paragraph anchor no longer exists', async () => {
+    document.body.innerHTML = `
+      <div data-message-id="msg-1">
+        <p data-start="200">updated paragraph with hello world content</p>
+      </div>
+    `;
+
+    const result = await jumpToBookmark(
+      makeBookmark({ dataStart: 100, selectedText: 'hello world content' }),
+      chatgptAdapter
+    );
+
+    expect(result).toBe(true);
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+    expect(window.scrollTo).not.toHaveBeenCalled();
+  });
+
+  it('scrolls the saved message into view when there is no paragraph anchor to restore', async () => {
+    document.body.innerHTML = `
+      <div data-message-id="msg-1">
+        <pre>code block content</pre>
+      </div>
+    `;
+
+    const result = await jumpToBookmark(
+      makeBookmark({ dataStart: null, selectedText: null }),
+      chatgptAdapter
+    );
+
+    expect(result).toBe(true);
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+    expect(window.scrollTo).not.toHaveBeenCalled();
+  });
+
+  it('finds message ids containing CSS selector metacharacters', async () => {
+    document.body.innerHTML = `
+      <div data-message-id='msg-"quoted"'>
+        <p data-start="0">hello world content</p>
+      </div>
+    `;
+
+    const result = await jumpToBookmark(
+      makeBookmark({ messageId: 'msg-"quoted"' }),
+      chatgptAdapter
+    );
+
+    expect(result).toBe(true);
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+  });
+
   it('falls back to scrollY when messageId not found and selectedText is null', async () => {
     document.body.innerHTML = '<div>unrelated content</div>';
     const result = await jumpToBookmark(

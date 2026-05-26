@@ -9,6 +9,8 @@ import {
   deleteBookmark,
   getConversationBookmarks,
   getActiveBookmark,
+  getBookmarkHandlePosition,
+  saveBookmarkHandlePosition,
 } from '../src/core/storage';
 import { mountBookmarkButton } from '../src/components/bookmark-button';
 import { mountDrawer } from '../src/components/drawer';
@@ -75,15 +77,21 @@ export default defineContentScript({
       onDelete: async (id) => {
         await deleteBookmark(id);
         await refreshDrawer();
+        await syncReturnButton();
       },
     });
 
+    const initialHandlePosition = await getBookmarkHandlePosition();
     mountBookmarkButton({
-      onClick: async () => {
+      initialPosition: initialHandlePosition,
+      onPositionChange: async (position) => {
+        await saveBookmarkHandlePosition(position);
+      },
+      onClick: async ({ viewportY }) => {
         const url = new URL(window.location.href);
         const adapter = getAdapter(url);
         const conversationId = adapter.getConversationId(url);
-        const anchor = captureAnchor(adapter);
+        const anchor = captureAnchor(adapter, viewportY);
         const bookmark = createBookmark(conversationId, url.hostname, anchor);
 
         await saveBookmark(bookmark);

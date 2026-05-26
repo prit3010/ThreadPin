@@ -2,6 +2,7 @@
 import type { Bookmark } from './types';
 
 const STORAGE_KEY = 'threadpin_bookmarks';
+const HANDLE_POSITION_KEY = 'threadpin_bookmark_handle_position';
 const MAX_PER_CONVERSATION = 10;
 
 export async function getAllBookmarks(): Promise<Bookmark[]> {
@@ -50,4 +51,21 @@ export async function getActiveBookmark(
 ): Promise<Bookmark | null> {
   const bookmarks = await getConversationBookmarks(conversationId);
   return bookmarks[0] ?? null; // sorted newest-first, so [0] is most recent
+}
+
+export async function getBookmarkHandlePosition(): Promise<number> {
+  const result = await chrome.storage.local.get(HANDLE_POSITION_KEY);
+  const value = result[HANDLE_POSITION_KEY];
+  return typeof value === 'number' ? clampNormalized(value) : 0.5;
+}
+
+export async function saveBookmarkHandlePosition(position: number): Promise<void> {
+  await chrome.storage.local.set({
+    [HANDLE_POSITION_KEY]: clampNormalized(position),
+  });
+}
+
+function clampNormalized(value: number): number {
+  if (!Number.isFinite(value)) return 0.5;
+  return Math.min(1, Math.max(0, value));
 }

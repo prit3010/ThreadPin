@@ -1,9 +1,11 @@
 import type { Adapter, AnchorData, Bookmark } from './types';
 
-export function captureAnchor(adapter: Adapter): AnchorData {
+export function captureAnchor(
+  adapter: Adapter,
+  viewportY = window.innerHeight / 2
+): AnchorData {
   const selection = window.getSelection();
   const selectedText = selection?.toString().trim() || null;
-  const viewportCenter = window.innerHeight / 2;
 
   // Find the message container closest to the viewport center.
   // Only consider containers that are at least partially visible in the
@@ -29,7 +31,7 @@ export function captureAnchor(adapter: Adapter): AnchorData {
     const clampedTop = Math.max(0, rect.top);
     const clampedBottom = Math.min(window.innerHeight, rect.bottom);
     const visibleCenter = (clampedTop + clampedBottom) / 2;
-    return Math.abs(visibleCenter - viewportCenter);
+    return Math.abs(visibleCenter - viewportY);
   }
 
   const nearestContainer = pool.reduce<Element | null>(
@@ -54,39 +56,34 @@ export function captureAnchor(adapter: Adapter): AnchorData {
 
   const messageId = nearestContainer.getAttribute('data-message-id') ?? '';
 
-  // Find the paragraph closest to the viewport center within that message
+  // Find the visible paragraph closest to the viewport center within that
+  // message. If the current spot is a code block or another unanchored region,
+  // leave dataStart null instead of snapping to an off-screen paragraph.
   const paragraphs = Array.from(
     nearestContainer.querySelectorAll(adapter.getParagraphSelector())
   );
-
-  const nearestP = paragraphs.reduce<Element | null>(
-    (nearest, el) => {
-      const rect = el.getBoundingClientRect();
-      const elCenter = rect.top + rect.height / 2;
-      const distance = Math.abs(elCenter - viewportCenter);
-
-      if (!nearest) return el;
-
-      const nearestRect = nearest.getBoundingClientRect();
-      const nearestCenter = nearestRect.top + nearestRect.height / 2;
-      const nearestDistance = Math.abs(nearestCenter - viewportCenter);
-
-      return distance < nearestDistance ? el : nearest;
-    },
-    null
-  );
+  const visibleParagraphs = paragraphs.filter(isVisibleInViewport);
+  const nearestP = closestToViewportY(visibleParagraphs, viewportY);
 
   // null means no [data-start] paragraph was found (e.g. cursor is inside a
   // code block). jumpToBookmark will use scrollY for in-message positioning.
   const dataStartAttr = nearestP?.getAttribute('data-start');
-  const dataStart = dataStartAttr !== null && dataStartAttr !== undefined
+  const parsedDataStart = dataStartAttr !== null && dataStartAttr !== undefined
     ? parseInt(dataStartAttr, 10)
-    : null;
+    : NaN;
+  const dataStart = Number.isFinite(parsedDataStart) ? parsedDataStart : null;
+
+  const visibleTextEl = closestToViewportCenter(
+    Array.from(nearestContainer.querySelectorAll('p, pre, li, code'))
+      .filter(isVisibleInViewport),
+    viewportY
+  );
 
   // Preview: prefer selection → nearest paragraph → container text (code block fallback)
   const rawPreview =
     selectedText ||
     nearestP?.textContent ||
+    visibleTextEl?.textContent ||
     nearestContainer.textContent?.trim().slice(0, 120) ||
     '';
   const preview = rawPreview.trim().slice(0, 120);
@@ -98,6 +95,44 @@ export function captureAnchor(adapter: Adapter): AnchorData {
     selectedText: selectedText ? selectedText.slice(0, 500) : null,
     preview,
   };
+}
+
+function isVisibleInViewport(el: Element): boolean {
+  const rect = el.getBoundingClientRect();
+  return rect.bottom > 0 && rect.top < window.innerHeight;
+}
+
+function closestToViewportCenter(
+  elements: Element[],
+  viewportY: number
+): Element | null {
+  return closestToViewportY(elements, viewportY);
+}
+
+function closestToViewportY(
+  elements: Element[],
+  viewportY: number
+): Element | null {
+  return elements.reduce<Element | null>(
+    (nearest, el) => {
+      const rect = el.getBoundingClientRect();
+      const clampedTop = Math.max(0, rect.top);
+      const clampedBottom = Math.min(window.innerHeight, rect.bottom);
+      const elCenter = (clampedTop + clampedBottom) / 2;
+      const distance = Math.abs(elCenter - viewportY);
+
+      if (!nearest) return el;
+
+      const nearestRect = nearest.getBoundingClientRect();
+      const nearestTop = Math.max(0, nearestRect.top);
+      const nearestBottom = Math.min(window.innerHeight, nearestRect.bottom);
+      const nearestCenter = (nearestTop + nearestBottom) / 2;
+      const nearestDistance = Math.abs(nearestCenter - viewportY);
+
+      return distance < nearestDistance ? el : nearest;
+    },
+    null
+  );
 }
 
 export function createBookmark(

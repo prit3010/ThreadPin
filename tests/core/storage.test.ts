@@ -7,6 +7,8 @@ import {
   saveBookmark,
   deleteBookmark,
   getActiveBookmark,
+  getBookmarkHandlePosition,
+  saveBookmarkHandlePosition,
 } from '../../src/core/storage';
 import type { Bookmark } from '../../src/core/types';
 
@@ -103,5 +105,20 @@ describe('storage', () => {
     const result = await getConversationBookmarks('chatgpt:abc123');
     expect(result).toHaveLength(10);
     expect(result.find(b => b.id === 'oldest')).toBeUndefined();
+  });
+
+  it('getBookmarkHandlePosition defaults to the middle of the viewport', async () => {
+    await expect(getBookmarkHandlePosition()).resolves.toBe(0.5);
+  });
+
+  it('saveBookmarkHandlePosition persists a clamped normalized position', async () => {
+    await saveBookmarkHandlePosition(1.4);
+    await expect(getBookmarkHandlePosition()).resolves.toBe(1);
+
+    await saveBookmarkHandlePosition(-0.2);
+    await expect(getBookmarkHandlePosition()).resolves.toBe(0);
+
+    await saveBookmarkHandlePosition(0.25);
+    await expect(getBookmarkHandlePosition()).resolves.toBe(0.25);
   });
 });

@@ -6,27 +6,44 @@ export async function jumpToBookmark(
 ): Promise<boolean> {
   // Strategy 1: find by data-message-id → data-start
   // Guard: skip if messageId is empty (bookmark captured on a non-message element)
-  const messageEl = bookmark.messageId
-    ? document.querySelector(`[data-message-id="${bookmark.messageId}"]`)
-    : null;
+  const messageEl = findElementByAttribute(
+    document,
+    '[data-message-id]',
+    'data-message-id',
+    bookmark.messageId
+  );
 
   if (messageEl) {
-    // Only look for a specific paragraph when we have a real dataStart anchor.
-    // null means the bookmark was on a code block or element with no [data-start],
-    // so fall back to scrollY for in-message precision.
-    const paragraphEl =
-      bookmark.dataStart !== null
-        ? messageEl.querySelector(`[data-start="${bookmark.dataStart}"]`)
-        : null;
+    const paragraphEl = bookmark.dataStart !== null
+      ? findElementByAttribute(
+          messageEl,
+          adapter.getParagraphSelector(),
+          'data-start',
+          String(bookmark.dataStart)
+        )
+      : null;
 
     if (paragraphEl) {
       (paragraphEl as HTMLElement).scrollIntoView({ behavior: 'instant', block: 'center' });
       flashHighlight(paragraphEl as HTMLElement);
-    } else {
-      // No paragraph anchor — scrollY is more precise than the container top
-      window.scrollTo({ top: bookmark.scrollY });
-      flashHighlight(messageEl as HTMLElement);
+      return true;
     }
+
+    if (bookmark.selectedText) {
+      const foundInMessage = findTextInRoot(
+        bookmark.selectedText,
+        messageEl,
+        adapter.getParagraphSelector()
+      );
+      if (foundInMessage) {
+        foundInMessage.scrollIntoView({ behavior: 'instant', block: 'center' });
+        flashHighlight(foundInMessage);
+        return true;
+      }
+    }
+
+    (messageEl as HTMLElement).scrollIntoView({ behavior: 'instant', block: 'center' });
+    flashHighlight(messageEl as HTMLElement);
     return true;
   }
 
@@ -48,25 +65,51 @@ export async function jumpToBookmark(
   return false;
 }
 
+function findElementByAttribute(
+  root: ParentNode,
+  selector: string,
+  attribute: string,
+  value: string
+): Element | null {
+  if (!value) return null;
+
+  const elements = root.querySelectorAll(selector);
+  for (const element of elements) {
+    if (element.getAttribute(attribute) === value) {
+      return element;
+    }
+  }
+  return null;
+}
+
 function findTextInPage(
   text: string,
   containerSelector: string
 ): HTMLElement | null {
-  const needle = text.slice(0, 50).toLowerCase();
+  return findTextInRoot(text, document, containerSelector);
+}
 
-  // Search within known message containers first
-  const containers = document.querySelectorAll(containerSelector);
-  for (const container of containers) {
-    if (container.textContent?.toLowerCase().includes(needle)) {
-      return container as HTMLElement;
+function findTextInRoot(
+  text: string,
+  root: ParentNode,
+  containerSelector: string
+): HTMLElement | null {
+  const needle = text.slice(0, 50).toLowerCase();
+  if (!needle) return null;
+
+  // Search within likely text blocks first for a more precise landing spot.
+  const textBlocks = root.querySelectorAll('p, pre, li');
+  for (const block of textBlocks) {
+    if (block.textContent?.toLowerCase().includes(needle)) {
+      return block as HTMLElement;
     }
   }
 
-  // Broad fallback: search all paragraphs on the page
-  const paragraphs = document.querySelectorAll('p, pre, li');
-  for (const p of paragraphs) {
-    if (p.textContent?.toLowerCase().includes(needle)) {
-      return p as HTMLElement;
+  // Search within known message containers as a broader fallback.
+  const containers = root.querySelectorAll(containerSelector);
+  for (const container of containers) {
+    if (container.textContent?.toLowerCase().includes(needle)) {
+      return container as HTMLElement;
     }
   }
 
