@@ -71,12 +71,19 @@ export function captureAnchor(adapter: Adapter): AnchorData {
     null
   );
 
-  const dataStart = parseInt(
-    nearestP?.getAttribute('data-start') ?? '0',
-    10
-  );
+  // null means no [data-start] paragraph was found (e.g. cursor is inside a
+  // code block). jumpToBookmark will use scrollY for in-message positioning.
+  const dataStartAttr = nearestP?.getAttribute('data-start');
+  const dataStart = dataStartAttr !== null && dataStartAttr !== undefined
+    ? parseInt(dataStartAttr, 10)
+    : null;
 
-  const rawPreview = selectedText || nearestP?.textContent || '';
+  // Preview: prefer selection → nearest paragraph → container text (code block fallback)
+  const rawPreview =
+    selectedText ||
+    nearestP?.textContent ||
+    nearestContainer.textContent?.trim().slice(0, 120) ||
+    '';
   const preview = rawPreview.trim().slice(0, 120);
 
   return {

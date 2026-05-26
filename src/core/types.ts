@@ -3,7 +3,7 @@ export interface Bookmark {
   conversationId: string;      // e.g. "chatgpt:abc-def-123"
   hostname: string;            // e.g. "chatgpt.com"
   messageId: string;           // value of data-message-id on the message container
-  dataStart: number;           // value of data-start on the nearest <p>
+  dataStart: number | null;    // value of data-start on the nearest <p>; null if none found (e.g. code block)
   scrollY: number;             // raw scroll offset — last-resort fallback only
   selectedText: string | null; // user's text selection at save time, capped at 500 chars
   preview: string;             // ≤120 chars shown in the drawer card
@@ -12,7 +12,7 @@ export interface Bookmark {
 
 export interface AnchorData {
   messageId: string;
-  dataStart: number;
+  dataStart: number | null;
   scrollY: number;
   selectedText: string | null;
   preview: string;

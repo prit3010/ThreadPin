@@ -11,12 +11,22 @@ export async function jumpToBookmark(
     : null;
 
   if (messageEl) {
-    const paragraphEl = messageEl.querySelector(
-      `[data-start="${bookmark.dataStart}"]`
-    );
-    const target = (paragraphEl ?? messageEl) as HTMLElement;
-    target.scrollIntoView({ behavior: 'instant', block: 'center' });
-    flashHighlight(target);
+    // Only look for a specific paragraph when we have a real dataStart anchor.
+    // null means the bookmark was on a code block or element with no [data-start],
+    // so fall back to scrollY for in-message precision.
+    const paragraphEl =
+      bookmark.dataStart !== null
+        ? messageEl.querySelector(`[data-start="${bookmark.dataStart}"]`)
+        : null;
+
+    if (paragraphEl) {
+      (paragraphEl as HTMLElement).scrollIntoView({ behavior: 'instant', block: 'center' });
+      flashHighlight(paragraphEl as HTMLElement);
+    } else {
+      // No paragraph anchor — scrollY is more precise than the container top
+      window.scrollTo({ top: bookmark.scrollY });
+      flashHighlight(messageEl as HTMLElement);
+    }
     return true;
   }
 
