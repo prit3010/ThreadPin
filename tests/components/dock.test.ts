@@ -75,7 +75,12 @@ describe('mountDock', () => {
       onRestore: vi.fn(),
     });
 
-    dock.refresh({ bookmarkCount: 5, hidden: true });
+    dock.refresh({ bookmarkCount: 5 });
+
+    expect(document.querySelector('.threadpin-dock')).not.toBeNull();
+    expect(document.querySelector('.threadpin-dock__list')?.textContent).toContain('5');
+
+    dock.refresh({ hidden: true });
 
     expect(document.querySelector('.threadpin-dock')).toBeNull();
     expect(document.querySelector('.threadpin-restore-tab')).not.toBeNull();
