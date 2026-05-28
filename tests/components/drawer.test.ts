@@ -37,6 +37,10 @@ describe('mountDrawer', () => {
     drawer.open();
     expect(document.getElementById('threadpin-drawer')!.className).not.toContain('threadpin-drawer--closed');
 
+    drawer.close();
+    expect(document.getElementById('threadpin-drawer')!.className).toContain('threadpin-drawer--closed');
+
+    drawer.open();
     document.querySelector<HTMLButtonElement>('.threadpin-drawer__minimize')!.click();
     expect(onMinimize).toHaveBeenCalledTimes(1);
     expect(document.getElementById('threadpin-drawer')!.className).toContain('threadpin-drawer--closed');
