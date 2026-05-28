@@ -8,7 +8,9 @@ import {
   deleteBookmark,
   getActiveBookmark,
   getBookmarkHandlePosition,
+  getThreadPinUiState,
   saveBookmarkHandlePosition,
+  saveThreadPinUiState,
 } from '../../src/core/storage';
 import type { Bookmark } from '../../src/core/types';
 
@@ -120,5 +122,39 @@ describe('storage', () => {
 
     await saveBookmarkHandlePosition(0.25);
     await expect(getBookmarkHandlePosition()).resolves.toBe(0.25);
+  });
+
+  it('getThreadPinUiState returns stable defaults', async () => {
+    await expect(getThreadPinUiState()).resolves.toEqual({
+      dockHidden: false,
+      drawerMode: 'closed',
+      drawerPosition: null,
+    });
+  });
+
+  it('saveThreadPinUiState persists partial updates', async () => {
+    await saveThreadPinUiState({
+      dockHidden: true,
+      drawerMode: 'open',
+      drawerPosition: { left: 120, top: 80 },
+    });
+
+    await saveThreadPinUiState({ drawerMode: 'minimized' });
+
+    await expect(getThreadPinUiState()).resolves.toEqual({
+      dockHidden: true,
+      drawerMode: 'minimized',
+      drawerPosition: { left: 120, top: 80 },
+    });
+  });
+
+  it('saveThreadPinUiState clamps drawer position to non-negative coordinates', async () => {
+    await saveThreadPinUiState({
+      drawerPosition: { left: -25, top: -10 },
+    });
+
+    await expect(getThreadPinUiState()).resolves.toMatchObject({
+      drawerPosition: { left: 0, top: 0 },
+    });
   });
 });
