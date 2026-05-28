@@ -132,6 +132,18 @@ describe('storage', () => {
     });
   });
 
+  it('getThreadPinUiState defaults invalid stored drawer positions', async () => {
+    await chrome.storage.local.set({
+      threadpin_ui_state: {
+        drawerPosition: { left: undefined, top: 'bad' },
+      },
+    });
+
+    await expect(getThreadPinUiState()).resolves.toMatchObject({
+      drawerPosition: null,
+    });
+  });
+
   it('saveThreadPinUiState persists partial updates', async () => {
     await saveThreadPinUiState({
       dockHidden: true,

@@ -121,6 +121,7 @@ function normalizeDrawerPosition(
   value: DrawerPosition | null | undefined
 ): DrawerPosition | null {
   if (!value) return null;
+  if (!Number.isFinite(value.left) || !Number.isFinite(value.top)) return null;
   return {
     left: Math.max(0, Math.round(value.left)),
     top: Math.max(0, Math.round(value.top)),
