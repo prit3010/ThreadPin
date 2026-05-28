@@ -1,7 +1,10 @@
 const DOCK_ID = 'threadpin-dock';
 const RESTORE_ID = 'threadpin-restore-tab';
 
+let nextInstanceId = 0;
+let activeInstanceId = 0;
 let activeKeepMountedCleanup: (() => void) | null = null;
+let activeKeepMountedOwnerId = 0;
 
 function keepMounted(el: HTMLElement): () => void {
   const observer = new MutationObserver(() => {
@@ -14,9 +17,11 @@ function keepMounted(el: HTMLElement): () => void {
   return () => observer.disconnect();
 }
 
-function stopKeepingMounted(): void {
+function stopKeepingMounted(ownerId?: number): void {
+  if (ownerId !== undefined && activeKeepMountedOwnerId !== ownerId) return;
   activeKeepMountedCleanup?.();
   activeKeepMountedCleanup = null;
+  activeKeepMountedOwnerId = 0;
 }
 
 export interface DockOptions {
@@ -38,13 +43,27 @@ export function mountDock(options: DockOptions): DockAPI {
   document.getElementById(DOCK_ID)?.remove();
   document.getElementById(RESTORE_ID)?.remove();
 
+  const instanceId = ++nextInstanceId;
+  activeInstanceId = instanceId;
+  let disposed = false;
   let bookmarkCount = options.bookmarkCount;
   let hidden = options.hidden;
   let dock: HTMLDivElement | null = null;
   let restore: HTMLButtonElement | null = null;
 
+  function isCurrent(): boolean {
+    return !disposed && activeInstanceId === instanceId;
+  }
+
+  function trackMountedElement(el: HTMLElement): void {
+    activeKeepMountedCleanup = keepMounted(el);
+    activeKeepMountedOwnerId = instanceId;
+  }
+
   function render(): void {
-    stopKeepingMounted();
+    if (!isCurrent()) return;
+
+    stopKeepingMounted(instanceId);
     dock?.remove();
     restore?.remove();
     dock = null;
@@ -59,7 +78,7 @@ export function mountDock(options: DockOptions): DockAPI {
       restore.setAttribute('aria-label', 'Restore ThreadPin');
       restore.addEventListener('click', options.onRestore);
       document.body.appendChild(restore);
-      activeKeepMountedCleanup = keepMounted(restore);
+      trackMountedElement(restore);
       return;
     }
 
@@ -92,21 +111,29 @@ export function mountDock(options: DockOptions): DockAPI {
     dock.appendChild(list);
     dock.appendChild(hide);
     document.body.appendChild(dock);
-    activeKeepMountedCleanup = keepMounted(dock);
+    trackMountedElement(dock);
   }
 
   render();
 
   return {
     refresh(update) {
+      if (!isCurrent()) return;
       bookmarkCount = update.bookmarkCount ?? bookmarkCount;
       hidden = update.hidden ?? hidden;
       render();
     },
     unmount() {
-      stopKeepingMounted();
+      if (disposed) return;
+      disposed = true;
+      if (activeInstanceId !== instanceId) return;
+
+      activeInstanceId = 0;
+      stopKeepingMounted(instanceId);
       dock?.remove();
       restore?.remove();
+      dock = null;
+      restore = null;
     },
   };
 }

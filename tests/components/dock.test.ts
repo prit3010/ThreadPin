@@ -85,4 +85,91 @@ describe('mountDock', () => {
     expect(document.querySelector('.threadpin-dock')).toBeNull();
     expect(document.querySelector('.threadpin-restore-tab')).not.toBeNull();
   });
+
+  it('unmount removes dock and restore tab', () => {
+    const visibleDock = mountDock({
+      bookmarkCount: 1,
+      hidden: false,
+      onSave: vi.fn(),
+      onToggleList: vi.fn(),
+      onHideAll: vi.fn(),
+      onRestore: vi.fn(),
+    });
+
+    visibleDock.unmount();
+
+    expect(document.querySelector('.threadpin-dock')).toBeNull();
+    expect(document.querySelector('.threadpin-restore-tab')).toBeNull();
+
+    const hiddenDock = mountDock({
+      bookmarkCount: 1,
+      hidden: true,
+      onSave: vi.fn(),
+      onToggleList: vi.fn(),
+      onHideAll: vi.fn(),
+      onRestore: vi.fn(),
+    });
+
+    hiddenDock.unmount();
+
+    expect(document.querySelector('.threadpin-dock')).toBeNull();
+    expect(document.querySelector('.threadpin-restore-tab')).toBeNull();
+  });
+
+  it('refresh after unmount does not re-add dock UI', () => {
+    const dock = mountDock({
+      bookmarkCount: 1,
+      hidden: false,
+      onSave: vi.fn(),
+      onToggleList: vi.fn(),
+      onHideAll: vi.fn(),
+      onRestore: vi.fn(),
+    });
+
+    dock.unmount();
+    dock.refresh({ bookmarkCount: 5, hidden: false });
+
+    expect(document.querySelector('.threadpin-dock')).toBeNull();
+    expect(document.querySelector('.threadpin-restore-tab')).toBeNull();
+  });
+
+  it('ignores older API calls after a newer mount exists', async () => {
+    const firstDock = mountDock({
+      bookmarkCount: 1,
+      hidden: false,
+      onSave: vi.fn(),
+      onToggleList: vi.fn(),
+      onHideAll: vi.fn(),
+      onRestore: vi.fn(),
+    });
+    const secondDock = mountDock({
+      bookmarkCount: 2,
+      hidden: false,
+      onSave: vi.fn(),
+      onToggleList: vi.fn(),
+      onHideAll: vi.fn(),
+      onRestore: vi.fn(),
+    });
+
+    firstDock.refresh({ bookmarkCount: 9, hidden: true });
+
+    expect(document.querySelector('.threadpin-restore-tab')).toBeNull();
+    expect(document.querySelector('.threadpin-dock')).not.toBeNull();
+    expect(document.querySelector('.threadpin-dock__list')?.textContent).toContain('2');
+
+    firstDock.unmount();
+
+    expect(document.querySelector('.threadpin-restore-tab')).toBeNull();
+    expect(document.querySelector('.threadpin-dock')).not.toBeNull();
+    expect(document.querySelector('.threadpin-dock__list')?.textContent).toContain('2');
+
+    document.querySelector('.threadpin-dock')?.remove();
+    await Promise.resolve();
+
+    expect(document.querySelector('.threadpin-dock')).not.toBeNull();
+
+    secondDock.refresh({ bookmarkCount: 3 });
+
+    expect(document.querySelector('.threadpin-dock__list')?.textContent).toContain('3');
+  });
 });
