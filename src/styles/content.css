@@ -193,12 +193,43 @@ html.dark {
 }
 
 .threadpin-drawer__header {
-  padding: 12px 14px;
-  display: flex;
+  padding: 10px 12px;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
   border-bottom: 1px solid var(--tp-border);
+  cursor: move;
+}
+
+.threadpin-drawer__grip {
+  color: var(--tp-text-muted);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -2px;
+}
+
+.threadpin-drawer__header-main {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.threadpin-drawer__minimize,
+.threadpin-drawer__close {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--tp-border);
+  background: var(--tp-bg-subtle);
+  color: var(--tp-text);
+  cursor: pointer;
+}
+
+.threadpin-drawer--dragging {
+  user-select: none;
 }
 
 .threadpin-drawer__title {
