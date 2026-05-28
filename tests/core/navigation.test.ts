@@ -52,23 +52,32 @@ describe('navigation', () => {
   });
 
   it('polls for location changes that do not emit history events', () => {
+    const originalLocation = window.location;
     vi.useFakeTimers();
-    initNavigation({ pollIntervalMs: 50 });
 
-    const listener = vi.fn();
-    window.addEventListener('threadpin:urlchange', listener);
+    try {
+      initNavigation({ pollIntervalMs: 50 });
 
-    history.replaceState({}, '', '/c/first');
-    listener.mockClear();
+      const listener = vi.fn();
+      window.addEventListener('threadpin:urlchange', listener);
 
-    Object.defineProperty(window, 'location', {
-      configurable: true,
-      value: new URL('https://chatgpt.com/c/second'),
-    });
+      history.replaceState({}, '', '/c/first');
+      listener.mockClear();
 
-    vi.advanceTimersByTime(60);
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        value: new URL('https://chatgpt.com/c/second'),
+      });
 
-    expect(listener).toHaveBeenCalledTimes(1);
-    vi.useRealTimers();
+      vi.advanceTimersByTime(60);
+
+      expect(listener).toHaveBeenCalledTimes(1);
+    } finally {
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        value: originalLocation,
+      });
+      vi.useRealTimers();
+    }
   });
 });
