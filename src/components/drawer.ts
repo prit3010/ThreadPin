@@ -1,9 +1,14 @@
 // src/components/drawer.ts
 import type { Bookmark } from '../core/types';
 
-const mountedObservers: MutationObserver[] = [];
+const DRAWER_ID = 'threadpin-drawer';
+const LEGACY_TAB_ID = 'threadpin-drawer-tab';
 
-function keepMounted(el: HTMLElement): MutationObserver {
+let nextInstanceId = 0;
+let activeInstanceId = 0;
+let activeCleanup: (() => void) | null = null;
+
+function keepMounted(el: HTMLElement): () => void {
   const observer = new MutationObserver(() => {
     if (typeof document === 'undefined') return;
     if (!document.body.contains(el)) {
@@ -11,15 +16,13 @@ function keepMounted(el: HTMLElement): MutationObserver {
     }
   });
   observer.observe(document.body, { childList: true, subtree: false });
-  mountedObservers.push(observer);
-  return observer;
+  return () => observer.disconnect();
 }
 
-function disconnectMountedObservers(): void {
-  mountedObservers.splice(0).forEach(observer => observer.disconnect());
+function cleanupActiveDrawer(): void {
+  activeCleanup?.();
+  activeCleanup = null;
 }
-
-const DRAWER_ID = 'threadpin-drawer';
 
 export interface DrawerPosition {
   left: number;
@@ -53,10 +56,15 @@ function formatRelativeTime(timestamp: number): string {
 }
 
 export function mountDrawer(options: DrawerOptions): DrawerAPI {
-  disconnectMountedObservers();
+  cleanupActiveDrawer();
   document.querySelectorAll(`#${DRAWER_ID}`).forEach(el => el.remove());
+  document.querySelectorAll(`#${LEGACY_TAB_ID}`).forEach(el => el.remove());
+
+  const instanceId = ++nextInstanceId;
+  activeInstanceId = instanceId;
 
   let isOpen = false;
+  let disposed = false;
   let currentBookmarks: Bookmark[] = [];
   let filterValue = '';
   let position = options.initialPosition ?? null;
@@ -120,10 +128,14 @@ export function mountDrawer(options: DrawerOptions): DrawerAPI {
   drawer.appendChild(filter);
   drawer.appendChild(list);
   document.body.appendChild(drawer);
-  const drawerObserver = keepMounted(drawer);
+  const stopKeepingMounted = keepMounted(drawer);
+
+  function isCurrent(): boolean {
+    return !disposed && activeInstanceId === instanceId;
+  }
 
   function applyPosition(): void {
-    if (!position) return;
+    if (!isCurrent() || !position) return;
     drawer.style.left = `${position.left}px`;
     drawer.style.top = `${position.top}px`;
     drawer.style.right = 'auto';
@@ -141,17 +153,20 @@ export function mountDrawer(options: DrawerOptions): DrawerAPI {
   }
 
   function openDrawer(): void {
+    if (!isCurrent()) return;
     isOpen = true;
     drawer.classList.remove('threadpin-drawer--closed');
     applyPosition();
   }
 
   function closeDrawer(): void {
+    if (!isCurrent()) return;
     isOpen = false;
     drawer.classList.add('threadpin-drawer--closed');
   }
 
   function renderList(bookmarks: Bookmark[]) {
+    if (!isCurrent()) return;
     currentBookmarks = bookmarks;
     count.textContent = `${bookmarks.length} saved`;
     list.innerHTML = '';
@@ -208,6 +223,7 @@ export function mountDrawer(options: DrawerOptions): DrawerAPI {
       jumpBtn.textContent = '↩';
       jumpBtn.setAttribute('aria-label', `Jump to bookmark: ${bookmark.preview}`);
       jumpBtn.addEventListener('click', () => {
+        if (!isCurrent()) return;
         options.onJump(bookmark);
         closeDrawer();
       });
@@ -217,6 +233,7 @@ export function mountDrawer(options: DrawerOptions): DrawerAPI {
       deleteBtn.textContent = '×';
       deleteBtn.setAttribute('aria-label', `Delete bookmark: ${bookmark.preview}`);
       deleteBtn.addEventListener('click', () => {
+        if (!isCurrent()) return;
         options.onDelete(bookmark.id);
       });
 
@@ -233,37 +250,55 @@ export function mountDrawer(options: DrawerOptions): DrawerAPI {
   }
 
   const handleMouseMove = (event: MouseEvent) => {
-    if (!isDragging) return;
+    if (!isCurrent() || !isDragging) return;
     position = clampDrawerPosition(event.clientX - dragOffsetX, event.clientY - dragOffsetY);
     applyPosition();
   };
 
   const handleMouseUp = () => {
-    if (!isDragging) return;
+    if (!isCurrent() || !isDragging) return;
     isDragging = false;
     drawer.classList.remove('threadpin-drawer--dragging');
     if (position) options.onPositionChange?.(position);
   };
 
+  function cleanup(): void {
+    if (disposed) return;
+    disposed = true;
+    isDragging = false;
+    stopKeepingMounted();
+    window.removeEventListener('mousemove', handleMouseMove);
+    window.removeEventListener('mouseup', handleMouseUp);
+    drawer.remove();
+    if (activeInstanceId === instanceId) {
+      activeInstanceId = 0;
+      activeCleanup = null;
+    }
+  }
+
   // Initial state
   renderList([]);
 
   filter.addEventListener('input', () => {
+    if (!isCurrent()) return;
     filterValue = filter.value.trim();
     renderList(currentBookmarks);
   });
 
   minimizeBtn.addEventListener('click', () => {
+    if (!isCurrent()) return;
     closeDrawer();
     options.onMinimize?.();
   });
 
   closeBtn.addEventListener('click', () => {
+    if (!isCurrent()) return;
     closeDrawer();
     options.onClose?.();
   });
 
   header.addEventListener('mousedown', (event) => {
+    if (!isCurrent()) return;
     if ((event.target as HTMLElement).closest('button')) return;
     const rect = drawer.getBoundingClientRect();
     isDragging = true;
@@ -274,18 +309,17 @@ export function mountDrawer(options: DrawerOptions): DrawerAPI {
 
   window.addEventListener('mousemove', handleMouseMove);
   window.addEventListener('mouseup', handleMouseUp);
+  activeCleanup = cleanup;
 
   const api: DrawerAPI = {
     refresh(bookmarks: Bookmark[]) {
+      if (!isCurrent()) return;
       renderList(bookmarks);
     },
     open: openDrawer,
     close: closeDrawer,
     unmount() {
-      drawerObserver.disconnect();
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-      drawer.remove();
+      cleanup();
     },
   };
 

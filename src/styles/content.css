@@ -148,29 +148,6 @@ html.dark {
   background: rgba(0, 0, 0, 0.28);
 }
 
-/* ── Drawer Tab ─────────────────────────────────────────── */
-.threadpin-drawer-tab {
-  position: fixed;
-  right: 16px;
-  top: calc(50% - 44px);
-  z-index: var(--tp-z);
-  background: var(--tp-bg);
-  color: var(--tp-text);
-  border: 1px solid var(--tp-border);
-  border-radius: var(--tp-radius);
-  padding: 8px 12px;
-  font-size: 13px;
-  font-family: system-ui, -apple-system, sans-serif;
-  cursor: pointer;
-  box-shadow: var(--tp-shadow);
-  white-space: nowrap;
-  transition: background 0.15s ease;
-}
-
-.threadpin-drawer-tab:hover {
-  background: var(--tp-bg-subtle);
-}
-
 /* ── Drawer Panel ───────────────────────────────────────── */
 .threadpin-drawer {
   position: fixed;

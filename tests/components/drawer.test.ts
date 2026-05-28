@@ -64,6 +64,18 @@ describe('mountDrawer', () => {
     });
 
     drawer.open();
+    const drawerEl = document.getElementById('threadpin-drawer')!;
+    drawerEl.getBoundingClientRect = () => ({
+      x: 100,
+      y: 100,
+      left: 100,
+      top: 100,
+      right: 490,
+      bottom: 420,
+      width: 390,
+      height: 320,
+      toJSON: () => undefined,
+    });
     const header = document.querySelector<HTMLElement>('.threadpin-drawer__header')!;
     header.dispatchEvent(new MouseEvent('mousedown', { clientX: 110, clientY: 110, bubbles: true }));
     window.dispatchEvent(new MouseEvent('mousemove', { clientX: 900, clientY: 700, bubbles: true }));
@@ -71,10 +83,94 @@ describe('mountDrawer', () => {
 
     expect(onPositionChange).toHaveBeenCalledTimes(1);
     const position = onPositionChange.mock.calls[0][0];
-    expect(position.left).toBeGreaterThanOrEqual(0);
-    expect(position.top).toBeGreaterThanOrEqual(0);
-    expect(position.left).toBeLessThanOrEqual(800);
-    expect(position.top).toBeLessThanOrEqual(600);
+    expect(position.left).toBe(410);
+    expect(position.top).toBe(280);
+  });
+
+  it('removes the legacy drawer tab when mounting', () => {
+    const legacyTab = document.createElement('button');
+    legacyTab.id = 'threadpin-drawer-tab';
+    document.body.appendChild(legacyTab);
+
+    mountDrawer({
+      onJump: vi.fn(),
+      onDelete: vi.fn(),
+    });
+
+    expect(document.getElementById('threadpin-drawer-tab')).toBeNull();
+  });
+
+  it('unmount removes drawer and makes later stale API calls inert', () => {
+    const drawer = mountDrawer({
+      onJump: vi.fn(),
+      onDelete: vi.fn(),
+    });
+
+    drawer.refresh([
+      makeBookmark({ id: 'critical', preview: 'Critical section checklist' }),
+    ]);
+    drawer.open();
+    drawer.unmount();
+
+    expect(document.getElementById('threadpin-drawer')).toBeNull();
+
+    drawer.open();
+    drawer.close();
+    drawer.refresh([
+      makeBookmark({ id: 'stale', preview: 'Stale bookmark should not render' }),
+    ]);
+
+    expect(document.getElementById('threadpin-drawer')).toBeNull();
+    expect(document.body.textContent).not.toContain('Stale bookmark should not render');
+  });
+
+  it('remount makes older API calls and drag listeners inert', () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 800 });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 600 });
+    const firstPositionChange = vi.fn();
+    const secondPositionChange = vi.fn();
+
+    const firstDrawer = mountDrawer({
+      initialPosition: { left: 100, top: 100 },
+      onJump: vi.fn(),
+      onDelete: vi.fn(),
+      onPositionChange: firstPositionChange,
+    });
+    firstDrawer.open();
+    const firstDrawerEl = document.getElementById('threadpin-drawer')!;
+    firstDrawerEl.getBoundingClientRect = () => ({
+      x: 100,
+      y: 100,
+      left: 100,
+      top: 100,
+      right: 490,
+      bottom: 420,
+      width: 390,
+      height: 320,
+      toJSON: () => undefined,
+    });
+    document.querySelector<HTMLElement>('.threadpin-drawer__header')!
+      .dispatchEvent(new MouseEvent('mousedown', { clientX: 110, clientY: 110, bubbles: true }));
+
+    const secondDrawer = mountDrawer({
+      onJump: vi.fn(),
+      onDelete: vi.fn(),
+      onPositionChange: secondPositionChange,
+    });
+    secondDrawer.open();
+
+    firstDrawer.close();
+    firstDrawer.refresh([
+      makeBookmark({ id: 'stale', preview: 'Stale bookmark should not render' }),
+    ]);
+    window.dispatchEvent(new MouseEvent('mousemove', { clientX: 900, clientY: 700, bubbles: true }));
+    window.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+
+    expect(firstPositionChange).not.toHaveBeenCalled();
+    expect(secondPositionChange).not.toHaveBeenCalled();
+    expect(document.querySelectorAll('#threadpin-drawer')).toHaveLength(1);
+    expect(document.getElementById('threadpin-drawer')!.className).not.toContain('threadpin-drawer--closed');
+    expect(document.body.textContent).not.toContain('Stale bookmark should not render');
   });
 
   it('filters bookmark rows by preview text', () => {
