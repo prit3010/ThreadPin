@@ -70,8 +70,8 @@ html.dark {
 /* ── Return Button ──────────────────────────────────────── */
 .threadpin-return-btn {
   position: fixed;
-  right: 16px;
-  top: calc(50% + 52px);
+  right: 88px;
+  top: calc(50% + 88px);
   z-index: var(--tp-z);
   background: var(--tp-accent);
   color: #fff;
@@ -118,10 +118,10 @@ html.dark {
 /* ── Drawer Panel ───────────────────────────────────────── */
 .threadpin-drawer {
   position: fixed;
-  right: 16px;
+  right: 88px;
   top: 50%;
   transform: translateY(-50%);
-  width: min(390px, calc(100vw - 32px));
+  width: min(390px, calc(100vw - 120px));
   max-height: min(70vh, 520px);
   overflow-y: auto;
   z-index: var(--tp-z);

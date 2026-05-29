@@ -136,6 +136,7 @@ export function mountDrawer(options: DrawerOptions): DrawerAPI {
 
   function applyPosition(): void {
     if (!isCurrent() || !position) return;
+    position = clampDrawerPosition(position.left, position.top);
     drawer.style.left = `${position.left}px`;
     drawer.style.top = `${position.top}px`;
     drawer.style.right = 'auto';
@@ -175,7 +176,7 @@ export function mountDrawer(options: DrawerOptions): DrawerAPI {
       const empty = document.createElement('p');
       empty.className = 'threadpin-drawer__empty';
       empty.textContent =
-        'No bookmarks yet. Click "Bookmark here" to save your place.';
+        'No bookmarks yet. Click PIN to save your place.';
       list.appendChild(empty);
       return;
     }

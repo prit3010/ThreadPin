@@ -87,6 +87,34 @@ describe('mountDrawer', () => {
     expect(position.top).toBe(280);
   });
 
+  it('clamps an initial position when opening on a smaller viewport', () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 800 });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 600 });
+
+    const drawer = mountDrawer({
+      initialPosition: { left: 1200, top: 900 },
+      onJump: vi.fn(),
+      onDelete: vi.fn(),
+    });
+    const drawerEl = document.getElementById('threadpin-drawer')!;
+    drawerEl.getBoundingClientRect = () => ({
+      x: 1200,
+      y: 900,
+      left: 1200,
+      top: 900,
+      right: 1590,
+      bottom: 1220,
+      width: 390,
+      height: 320,
+      toJSON: () => undefined,
+    });
+
+    drawer.open();
+
+    expect(drawerEl.style.left).toBe('410px');
+    expect(drawerEl.style.top).toBe('280px');
+  });
+
   it('removes the legacy drawer tab when mounting', () => {
     const legacyTab = document.createElement('button');
     legacyTab.id = 'threadpin-drawer-tab';

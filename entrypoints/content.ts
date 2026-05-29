@@ -41,16 +41,6 @@ function waitForChatGPT(): Promise<void> {
   });
 }
 
-// ── Guard: re-append element if ChatGPT ever removes it ──────────────────
-function keepMounted(el: HTMLElement): void {
-  const observer = new MutationObserver(() => {
-    if (!document.body.contains(el)) {
-      document.body.appendChild(el);
-    }
-  });
-  observer.observe(document.body, { childList: true, subtree: false });
-}
-
 export default defineContentScript({
   matches: ['https://chatgpt.com/*', 'https://chat.openai.com/*'],
   async main() {

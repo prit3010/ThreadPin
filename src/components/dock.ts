@@ -1,5 +1,6 @@
 const DOCK_ID = 'threadpin-dock';
 const RESTORE_ID = 'threadpin-restore-tab';
+const LEGACY_BOOKMARK_BUTTON_ID = 'threadpin-bookmark-btn';
 
 let nextInstanceId = 0;
 let activeInstanceId = 0;
@@ -42,6 +43,7 @@ export function mountDock(options: DockOptions): DockAPI {
   stopKeepingMounted();
   document.getElementById(DOCK_ID)?.remove();
   document.getElementById(RESTORE_ID)?.remove();
+  document.getElementById(LEGACY_BOOKMARK_BUTTON_ID)?.remove();
 
   const instanceId = ++nextInstanceId;
   activeInstanceId = instanceId;

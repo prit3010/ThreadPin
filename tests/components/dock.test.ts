@@ -22,6 +22,23 @@ describe('mountDock', () => {
     expect(document.querySelector('.threadpin-dock__hide')?.getAttribute('aria-label')).toBe('Hide ThreadPin');
   });
 
+  it('removes a stale legacy bookmark button when mounting', () => {
+    const legacyButton = document.createElement('button');
+    legacyButton.id = 'threadpin-bookmark-btn';
+    document.body.appendChild(legacyButton);
+
+    mountDock({
+      bookmarkCount: 0,
+      hidden: false,
+      onSave: vi.fn(),
+      onToggleList: vi.fn(),
+      onHideAll: vi.fn(),
+      onRestore: vi.fn(),
+    });
+
+    expect(document.getElementById('threadpin-bookmark-btn')).toBeNull();
+  });
+
   it('calls the correct action callbacks', () => {
     const onSave = vi.fn();
     const onToggleList = vi.fn();
