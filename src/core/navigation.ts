@@ -1,6 +1,8 @@
 const URL_CHANGE_EVENT = 'threadpin:urlchange';
 const PATCHED_KEY = '__threadpin_patched__';
 const POLL_KEY = '__threadpin_url_poll__';
+const POPSTATE_KEY = '__threadpin_popstate_patched__';
+const POPSTATE_HANDLER_KEY = '__threadpin_popstate_handler__';
 
 export interface NavigationOptions {
   pollIntervalMs?: number;
@@ -32,11 +34,20 @@ export function initNavigation(options: NavigationOptions = {}): void {
     (history.replaceState as any)[PATCHED_KEY] = true;
   }
 
+  const windowWithPopstate = window as typeof window & {
+    [POPSTATE_KEY]?: boolean;
+    [POPSTATE_HANDLER_KEY]?: (event: PopStateEvent) => void;
+  };
+
   // Handle browser back/forward buttons
-  window.addEventListener('popstate', () => {
-    (window as any).__threadpin_last_url__ = window.location.href;
-    window.dispatchEvent(new Event(URL_CHANGE_EVENT));
-  });
+  if (!windowWithPopstate[POPSTATE_KEY]) {
+    windowWithPopstate[POPSTATE_HANDLER_KEY] = () => {
+      (window as any).__threadpin_last_url__ = window.location.href;
+      window.dispatchEvent(new Event(URL_CHANGE_EVENT));
+    };
+    window.addEventListener('popstate', windowWithPopstate[POPSTATE_HANDLER_KEY]);
+    windowWithPopstate[POPSTATE_KEY] = true;
+  }
 
   const windowWithPoll = window as typeof window & {
     [POLL_KEY]?: number;

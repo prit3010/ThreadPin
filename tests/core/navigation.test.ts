@@ -5,22 +5,43 @@ describe('navigation', () => {
   const originalPushState = history.pushState;
   const originalReplaceState = history.replaceState;
   const originalLocation = window.location;
+  const urlChangeListeners: Array<() => void> = [];
+
+  const addUrlChangeListener = (listener: () => void): void => {
+    window.addEventListener('threadpin:urlchange', listener);
+    urlChangeListeners.push(listener);
+  };
 
   beforeEach(() => {
     vi.restoreAllMocks();
   });
 
   afterEach(() => {
-    const windowWithPoll = window as typeof window & {
+    const windowWithNavigationState = window as typeof window & {
       __threadpin_url_poll__?: number;
       __threadpin_last_url__?: string;
+      __threadpin_popstate_patched__?: boolean;
+      __threadpin_popstate_handler__?: (event: PopStateEvent) => void;
     };
 
-    if (windowWithPoll.__threadpin_url_poll__ !== undefined) {
-      window.clearInterval(windowWithPoll.__threadpin_url_poll__);
-      delete windowWithPoll.__threadpin_url_poll__;
+    for (const listener of urlChangeListeners) {
+      window.removeEventListener('threadpin:urlchange', listener);
     }
-    delete windowWithPoll.__threadpin_last_url__;
+    urlChangeListeners.length = 0;
+
+    if (windowWithNavigationState.__threadpin_url_poll__ !== undefined) {
+      window.clearInterval(windowWithNavigationState.__threadpin_url_poll__);
+      delete windowWithNavigationState.__threadpin_url_poll__;
+    }
+    if (windowWithNavigationState.__threadpin_popstate_handler__) {
+      window.removeEventListener(
+        'popstate',
+        windowWithNavigationState.__threadpin_popstate_handler__,
+      );
+      delete windowWithNavigationState.__threadpin_popstate_handler__;
+    }
+    delete windowWithNavigationState.__threadpin_popstate_patched__;
+    delete windowWithNavigationState.__threadpin_last_url__;
     history.pushState = originalPushState;
     history.replaceState = originalReplaceState;
     delete (history.pushState as any).__threadpin_patched__;
@@ -35,6 +56,7 @@ describe('navigation', () => {
   it('calls listener when threadpin:urlchange event fires', () => {
     const listener = vi.fn();
     onUrlChange(listener);
+    urlChangeListeners.push(listener);
     window.dispatchEvent(new Event('threadpin:urlchange'));
     expect(listener).toHaveBeenCalledTimes(1);
   });
@@ -43,7 +65,7 @@ describe('navigation', () => {
     initNavigation();
 
     const listener = vi.fn();
-    window.addEventListener('threadpin:urlchange', listener);
+    addUrlChangeListener(listener);
     history.pushState({}, '', '/c/new-conversation');
 
     expect(listener).toHaveBeenCalledTimes(1);
@@ -53,8 +75,20 @@ describe('navigation', () => {
     initNavigation();
 
     const listener = vi.fn();
-    window.addEventListener('threadpin:urlchange', listener);
+    addUrlChangeListener(listener);
     history.replaceState({}, '', '/c/same-url');
+
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not add duplicate popstate listeners', () => {
+    initNavigation();
+    initNavigation();
+
+    const listener = vi.fn();
+    addUrlChangeListener(listener);
+
+    window.dispatchEvent(new PopStateEvent('popstate'));
 
     expect(listener).toHaveBeenCalledTimes(1);
   });
@@ -66,7 +100,7 @@ describe('navigation', () => {
       initNavigation({ pollIntervalMs: 50 });
 
       const listener = vi.fn();
-      window.addEventListener('threadpin:urlchange', listener);
+      addUrlChangeListener(listener);
 
       history.replaceState({}, '', '/c/first');
       listener.mockClear();
