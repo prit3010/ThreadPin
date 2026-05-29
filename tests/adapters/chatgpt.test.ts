@@ -25,6 +25,11 @@ describe('chatgptAdapter', () => {
     expect(chatgptAdapter.getConversationId(url)).toBe('chatgpt:abc-def-123');
   });
 
+  it('extracts conversation ID when called without adapter receiver', () => {
+    const { getConversationId } = chatgptAdapter;
+    expect(getConversationId(new URL('https://chatgpt.com/c/abc-123'))).toBe('chatgpt:abc-123');
+  });
+
   it('falls back to pathname when no /c/{id} segment present', () => {
     const url = new URL('https://chatgpt.com/');
     expect(chatgptAdapter.getConversationId(url)).toBe('chatgpt:/');
