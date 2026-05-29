@@ -9,10 +9,14 @@ import {
   deleteBookmark,
   getConversationBookmarks,
   getActiveBookmark,
-  getBookmarkHandlePosition,
-  saveBookmarkHandlePosition,
+  getThreadPinUiState,
+  saveThreadPinUiState,
 } from '../src/core/storage';
-import { mountBookmarkButton } from '../src/components/bookmark-button';
+import {
+  getConversationIdForRender,
+  getConversationIdForSave,
+} from '../src/core/conversation';
+import { mountDock } from '../src/components/dock';
 import { mountDrawer } from '../src/components/drawer';
 import { mountReturnButton } from '../src/components/return-button';
 import { showToast } from '../src/components/toast';
@@ -66,7 +70,24 @@ export default defineContentScript({
       },
     });
 
+    let currentConversationId: string | null = null;
+    let currentBookmarkCount = 0;
+    let uiState = await getThreadPinUiState();
+
     const drawer = mountDrawer({
+      initialPosition: uiState.drawerPosition,
+      onPositionChange: async (position) => {
+        uiState = { ...uiState, drawerPosition: position };
+        await saveThreadPinUiState({ drawerPosition: position });
+      },
+      onMinimize: async () => {
+        uiState = { ...uiState, drawerMode: 'minimized' };
+        await saveThreadPinUiState({ drawerMode: 'minimized' });
+      },
+      onClose: async () => {
+        uiState = { ...uiState, drawerMode: 'closed' };
+        await saveThreadPinUiState({ drawerMode: 'closed' });
+      },
       onJump: async (bookmark) => {
         const adapter = getAdapter(new URL(window.location.href));
         const found = await jumpToBookmark(bookmark, adapter);
@@ -76,45 +97,68 @@ export default defineContentScript({
       },
       onDelete: async (id) => {
         await deleteBookmark(id);
-        await refreshDrawer();
-        await syncReturnButton();
+        await refreshConversationUi();
       },
     });
 
-    const initialHandlePosition = await getBookmarkHandlePosition();
-    mountBookmarkButton({
-      initialPosition: initialHandlePosition,
-      onPositionChange: async (position) => {
-        await saveBookmarkHandlePosition(position);
+    const dock = mountDock({
+      bookmarkCount: currentBookmarkCount,
+      hidden: uiState.dockHidden,
+      onSave: async () => {
+        await saveCurrentBookmark();
       },
-      onClick: async ({ viewportY }) => {
-        const url = new URL(window.location.href);
-        const adapter = getAdapter(url);
-        const conversationId = adapter.getConversationId(url);
-        const anchor = captureAnchor(adapter, viewportY);
-        const bookmark = createBookmark(conversationId, url.hostname, anchor);
-
-        await saveBookmark(bookmark);
-        showToast('Bookmarked this spot.');
-        returnBtn.show(bookmark);
-        await refreshDrawer();
+      onToggleList: async () => {
+        if (uiState.drawerMode === 'open') {
+          drawer.close();
+          uiState = { ...uiState, drawerMode: 'closed' };
+          await saveThreadPinUiState({ drawerMode: 'closed' });
+          return;
+        }
+        drawer.open();
+        uiState = { ...uiState, drawerMode: 'open', dockHidden: false };
+        await saveThreadPinUiState({ drawerMode: 'open', dockHidden: false });
+      },
+      onHideAll: async () => {
+        drawer.close();
+        uiState = { ...uiState, dockHidden: true, drawerMode: 'closed' };
+        await saveThreadPinUiState({ dockHidden: true, drawerMode: 'closed' });
+        dock.refresh({ hidden: true });
+      },
+      onRestore: async () => {
+        uiState = { ...uiState, dockHidden: false, drawerMode: 'closed' };
+        await saveThreadPinUiState({ dockHidden: false, drawerMode: 'closed' });
+        dock.refresh({ hidden: false });
       },
     });
 
-    // ── Helper: refresh drawer with current conversation's bookmarks ──
-    async function refreshDrawer(): Promise<void> {
+    async function saveCurrentBookmark(): Promise<void> {
       const url = new URL(window.location.href);
       const adapter = getAdapter(url);
-      const conversationId = adapter.getConversationId(url);
-      const bookmarks = await getConversationBookmarks(conversationId);
-      drawer.refresh(bookmarks);
+      const conversationId = getConversationIdForSave(adapter, url);
+      if (!conversationId) {
+        showToast('Open a saved chat before bookmarking.');
+        return;
+      }
+
+      const anchor = captureAnchor(adapter, Math.round(window.innerHeight / 2));
+      const bookmark = createBookmark(conversationId, url.hostname, anchor);
+
+      await saveBookmark(bookmark);
+      showToast('Bookmarked this spot.');
+      returnBtn.show(bookmark);
+      await refreshConversationUi();
     }
 
-    // ── Helper: sync return button to the active bookmark ──
-    async function syncReturnButton(): Promise<void> {
+    async function refreshConversationUi(): Promise<void> {
       const url = new URL(window.location.href);
       const adapter = getAdapter(url);
-      const conversationId = adapter.getConversationId(url);
+      const conversationId = getConversationIdForRender(adapter, url);
+      currentConversationId = conversationId;
+      const bookmarks = await getConversationBookmarks(conversationId);
+      currentBookmarkCount = bookmarks.length;
+      drawer.refresh(bookmarks);
+      dock.refresh({ bookmarkCount: currentBookmarkCount, hidden: uiState.dockHidden });
+
       const active = await getActiveBookmark(conversationId);
       if (active) {
         returnBtn.show(active);
@@ -123,18 +167,24 @@ export default defineContentScript({
       }
     }
 
+    async function handleConversationMaybeChanged(): Promise<void> {
+      const url = new URL(window.location.href);
+      const nextConversationId = getConversationIdForRender(getAdapter(url), url);
+      if (nextConversationId === currentConversationId) return;
+      returnBtn.hide();
+      await refreshConversationUi();
+    }
+
     // ── Handle conversation switches (SPA navigation) ─────
     initNavigation();
     onUrlChange(async () => {
-      // Immediately hide the return button — we're in a new conversation
-      returnBtn.hide();
-      // Refresh drawer and return button for the new conversation
-      await refreshDrawer();
-      await syncReturnButton();
+      await handleConversationMaybeChanged();
     });
 
     // ── Initial load ──────────────────────────────────────
-    await refreshDrawer();
-    await syncReturnButton();
+    await refreshConversationUi();
+    if (uiState.drawerMode === 'open' && !uiState.dockHidden) {
+      drawer.open();
+    }
   },
 });
