@@ -12,28 +12,35 @@ function expectSourceToMatch(pattern: RegExp): void {
 }
 
 describe('content script wiring', () => {
-  it('uses dock and stable conversation helpers instead of legacy bookmark button wiring', () => {
+  it('uses dock + stable conversation helpers and drops the legacy return button', () => {
     expect(contentSource).toContain("from '../src/components/dock'");
     expect(contentSource).toContain('mountDock({');
     expect(contentSource).toContain('getConversationIdForRender');
     expect(contentSource).toContain('getConversationIdForSave');
     expect(contentSource).toContain('handleConversationMaybeChanged');
+    expect(contentSource).not.toContain("from '../src/components/return-button'");
+    expect(contentSource).not.toContain('mountReturnButton');
     expect(contentSource).not.toContain("from '../src/components/bookmark-button'");
-    expect(contentSource).not.toContain('getBookmarkHandlePosition');
-    expect(contentSource).not.toContain('saveBookmarkHandlePosition');
     expect(contentSource).not.toContain('mountBookmarkButton');
   });
 
-  it('hides return UI while all ThreadPin UI is hidden and restores it by refreshing conversation state', () => {
+  it('captures at the draggable PIN line using the stored handle fraction', () => {
+    expect(contentSource).toContain('getBookmarkHandlePosition');
+    expect(contentSource).toContain('saveBookmarkHandlePosition');
+    expectSourceToMatch(/const viewportY = Math\.round\(dockFraction \* window\.innerHeight\);/);
+    expectSourceToMatch(/captureAnchor\(adapter, viewportY\)/);
+  });
+
+  it('drives the return icon from the dock based on the active bookmark', () => {
     expectSourceToMatch(
-      /onHideAll:\s*async\s*\(\)\s*=>\s*{.*?returnBtn\.hide\(\);.*?dock\.refresh\(\{\s*hidden:\s*true\s*}\);/
+      /onReturn:\s*async\s*\(\)\s*=>\s*{.*?if\s*\(!activeBookmark\)\s*return;.*?jumpToBookmark\(activeBookmark, adapter\)/
     );
-    expectSourceToMatch(
-      /if\s*\(\s*uiState\.dockHidden\s*\)\s*{\s*returnBtn\.hide\(\);\s*return;\s*}\s*const active = await getActiveBookmark\(conversationId\);/
-    );
-    expectSourceToMatch(
-      /onRestore:\s*async\s*\(\)\s*=>\s*{.*?dock\.refresh\(\{\s*hidden:\s*false\s*}\);.*?await refreshConversationUi\(\);/
-    );
+    expectSourceToMatch(/returnVisible:\s*activeBookmark !== null/);
+  });
+
+  it('opens the list panel anchored beside the dock', () => {
+    expect(contentSource).toContain('openDrawerBesideDock');
+    expectSourceToMatch(/const rect = dock\.getAnchorRect\(\);/);
   });
 
   it('persists the drawer as closed after jumping from a bookmark row', () => {

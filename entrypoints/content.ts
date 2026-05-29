@@ -11,6 +11,8 @@ import {
   getActiveBookmark,
   getThreadPinUiState,
   saveThreadPinUiState,
+  getBookmarkHandlePosition,
+  saveBookmarkHandlePosition,
 } from '../src/core/storage';
 import {
   getConversationIdForRender,
@@ -18,13 +20,10 @@ import {
 } from '../src/core/conversation';
 import { mountDock } from '../src/components/dock';
 import { mountDrawer } from '../src/components/drawer';
-import { mountReturnButton } from '../src/components/return-button';
 import { showToast } from '../src/components/toast';
+import type { Bookmark } from '../src/core/types';
 
 // ── Wait for ChatGPT's React app to finish hydrating ─────────────────────
-// ChatGPT (Next.js) replaces document.body content ~2s after the content
-// script runs. We wait for <main> to appear — that's ChatGPT's signal that
-// the app is interactive and won't wipe our appended elements.
 function waitForChatGPT(): Promise<void> {
   return new Promise((resolve) => {
     if (document.querySelector('main')) {
@@ -46,30 +45,15 @@ export default defineContentScript({
   async main() {
     console.log('[ThreadPin] loaded');
 
-    // Wait for ChatGPT to finish hydrating before mounting any UI
     await waitForChatGPT();
-
-    // ── Mount persistent UI ───────────────────────────────
-    const returnBtn = mountReturnButton({
-      onReturn: async (bookmark) => {
-        const adapter = getAdapter(new URL(window.location.href));
-        const found = await jumpToBookmark(bookmark, adapter);
-        if (!found) {
-          showToast('Could not find exact spot — returned to saved position.');
-        }
-      },
-    });
 
     let currentConversationId: string | null = null;
     let currentBookmarkCount = 0;
+    let activeBookmark: Bookmark | null = null;
     let uiState = await getThreadPinUiState();
+    let dockFraction = await getBookmarkHandlePosition();
 
     const drawer = mountDrawer({
-      initialPosition: uiState.drawerPosition,
-      onPositionChange: async (position) => {
-        uiState = { ...uiState, drawerPosition: position };
-        await saveThreadPinUiState({ drawerPosition: position });
-      },
       onMinimize: async () => {
         uiState = { ...uiState, drawerMode: 'minimized' };
         await saveThreadPinUiState({ drawerMode: 'minimized' });
@@ -96,8 +80,22 @@ export default defineContentScript({
     const dock = mountDock({
       bookmarkCount: currentBookmarkCount,
       hidden: uiState.dockHidden,
+      positionFraction: dockFraction,
+      returnVisible: false,
       onSave: async () => {
         await saveCurrentBookmark();
+      },
+      onReturn: async () => {
+        if (!activeBookmark) return;
+        const adapter = getAdapter(new URL(window.location.href));
+        const found = await jumpToBookmark(activeBookmark, adapter);
+        if (!found) {
+          showToast('Could not find exact spot — returned to saved position.');
+        }
+      },
+      onPositionChange: async (fraction) => {
+        dockFraction = fraction;
+        await saveBookmarkHandlePosition(fraction);
       },
       onToggleList: async () => {
         if (uiState.drawerMode === 'open') {
@@ -106,16 +104,15 @@ export default defineContentScript({
           await saveThreadPinUiState({ drawerMode: 'closed' });
           return;
         }
-        drawer.open();
+        openDrawerBesideDock();
         uiState = { ...uiState, drawerMode: 'open', dockHidden: false };
         await saveThreadPinUiState({ drawerMode: 'open', dockHidden: false });
       },
       onHideAll: async () => {
         drawer.close();
-        returnBtn.hide();
         uiState = { ...uiState, dockHidden: true, drawerMode: 'closed' };
         await saveThreadPinUiState({ dockHidden: true, drawerMode: 'closed' });
-        dock.refresh({ hidden: true });
+        dock.refresh({ hidden: true, returnVisible: false });
       },
       onRestore: async () => {
         uiState = { ...uiState, dockHidden: false, drawerMode: 'closed' };
@@ -124,6 +121,13 @@ export default defineContentScript({
         await refreshConversationUi();
       },
     });
+
+    function openDrawerBesideDock(): void {
+      const rect = dock.getAnchorRect();
+      drawer.open(
+        rect ? { left: rect.left, top: rect.top, height: rect.height } : undefined
+      );
+    }
 
     async function saveCurrentBookmark(): Promise<void> {
       const url = new URL(window.location.href);
@@ -134,12 +138,12 @@ export default defineContentScript({
         return;
       }
 
-      const anchor = captureAnchor(adapter, Math.round(window.innerHeight / 2));
+      const viewportY = Math.round(dockFraction * window.innerHeight);
+      const anchor = captureAnchor(adapter, viewportY);
       const bookmark = createBookmark(conversationId, url.hostname, anchor);
 
       await saveBookmark(bookmark);
       showToast('Bookmarked this spot.');
-      returnBtn.show(bookmark);
       await refreshConversationUi();
     }
 
@@ -151,25 +155,31 @@ export default defineContentScript({
       const bookmarks = await getConversationBookmarks(conversationId);
       currentBookmarkCount = bookmarks.length;
       drawer.refresh(bookmarks);
-      dock.refresh({ bookmarkCount: currentBookmarkCount, hidden: uiState.dockHidden });
+
       if (uiState.dockHidden) {
-        returnBtn.hide();
+        activeBookmark = null;
+        dock.refresh({
+          bookmarkCount: currentBookmarkCount,
+          hidden: true,
+          returnVisible: false,
+        });
         return;
       }
 
-      const active = await getActiveBookmark(conversationId);
-      if (active) {
-        returnBtn.show(active);
-      } else {
-        returnBtn.hide();
-      }
+      activeBookmark = await getActiveBookmark(conversationId);
+      dock.refresh({
+        bookmarkCount: currentBookmarkCount,
+        hidden: false,
+        returnVisible: activeBookmark !== null,
+      });
     }
 
     async function handleConversationMaybeChanged(): Promise<void> {
       const url = new URL(window.location.href);
       const nextConversationId = getConversationIdForRender(getAdapter(url), url);
       if (nextConversationId === currentConversationId) return;
-      returnBtn.hide();
+      activeBookmark = null;
+      dock.refresh({ returnVisible: false });
       await refreshConversationUi();
     }
 
@@ -182,7 +192,7 @@ export default defineContentScript({
     // ── Initial load ──────────────────────────────────────
     await refreshConversationUi();
     if (uiState.drawerMode === 'open' && !uiState.dockHidden) {
-      drawer.open();
+      openDrawerBesideDock();
     }
   },
 });
