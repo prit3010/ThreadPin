@@ -287,15 +287,17 @@ describe('mountDock', () => {
     Object.defineProperty(window, 'innerHeight', { configurable: true, value: 1000 });
 
     const realGetRect = Element.prototype.getBoundingClientRect;
-    // Simulate real layout: the PIN center sits 100px below the dock's top edge
-    // (pin top 80 + half its 40px height). jsdom reports 0 for offsets, so stub
-    // rects to prove applyPosition measures the PIN relative to the dock.
+    // Simulate real layout where the dock itself is offset (top 50) and the PIN
+    // center sits 100px below the dock's top edge (pin top 130 + half its 40px
+    // height, minus the dock's own top 50). The non-zero dock top ensures this
+    // locks in the dock-relative subtraction (pinRect.top - dockRect.top), not a
+    // plain pinRect.top. jsdom reports 0 for offsets, so stub rects.
     Element.prototype.getBoundingClientRect = function (this: Element): DOMRect {
       if (this.classList?.contains('threadpin-dock__save')) {
-        return { top: 80, bottom: 120, left: 0, right: 0, width: 0, height: 40, x: 0, y: 80, toJSON: () => undefined } as DOMRect;
+        return { top: 130, bottom: 170, left: 0, right: 0, width: 0, height: 40, x: 0, y: 130, toJSON: () => undefined } as DOMRect;
       }
       if ((this as HTMLElement).id === 'threadpin-dock') {
-        return { top: 0, bottom: 200, left: 0, right: 0, width: 0, height: 200, x: 0, y: 0, toJSON: () => undefined } as DOMRect;
+        return { top: 50, bottom: 250, left: 0, right: 0, width: 0, height: 200, x: 0, y: 50, toJSON: () => undefined } as DOMRect;
       }
       return { top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0, x: 0, y: 0, toJSON: () => undefined } as DOMRect;
     };
@@ -311,7 +313,7 @@ describe('mountDock', () => {
         onRestore: vi.fn(),
       });
 
-      // target = 0.5 * 1000 = 500 ; pinOffset = (80 - 0) + 40/2 = 100 ; top = 400
+      // target = 0.5 * 1000 = 500 ; pinOffset = (130 - 50) + 40/2 = 100 ; top = 400
       expect(document.getElementById('threadpin-dock')!.style.top).toBe('400px');
       dock.unmount();
     } finally {
