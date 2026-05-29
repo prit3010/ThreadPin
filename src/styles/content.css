@@ -67,54 +67,6 @@ html.dark {
   transform: translateX(-50%) translateY(0);
 }
 
-/* ── Return Button ──────────────────────────────────────── */
-.threadpin-return-btn {
-  position: fixed;
-  right: 88px;
-  top: calc(50% + 88px);
-  z-index: var(--tp-z);
-  background: var(--tp-accent);
-  color: #fff;
-  border: none;
-  border-radius: var(--tp-radius);
-  font-family: system-ui, -apple-system, sans-serif;
-  cursor: pointer;
-  box-shadow: var(--tp-shadow);
-  display: flex;
-  align-items: stretch;
-  transition: opacity 0.2s ease, transform 0.2s ease;
-}
-
-.threadpin-return-btn--hidden {
-  opacity: 0;
-  pointer-events: none;
-  transform: translateX(8px);
-}
-
-.threadpin-return-btn__label {
-  padding: 8px 10px;
-  font-size: 13px;
-  white-space: nowrap;
-  cursor: pointer;
-  user-select: none;
-}
-
-.threadpin-return-btn__dismiss {
-  background: rgba(0, 0, 0, 0.15);
-  border: none;
-  border-left: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 0 var(--tp-radius) var(--tp-radius) 0;
-  color: #fff;
-  padding: 8px 9px;
-  font-size: 15px;
-  cursor: pointer;
-  line-height: 1;
-}
-
-.threadpin-return-btn__dismiss:hover {
-  background: rgba(0, 0, 0, 0.28);
-}
-
 /* ── Drawer Panel ───────────────────────────────────────── */
 .threadpin-drawer {
   position: fixed;
@@ -139,18 +91,10 @@ html.dark {
 .threadpin-drawer__header {
   padding: 10px 12px;
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 8px;
   border-bottom: 1px solid var(--tp-border);
-  cursor: move;
-}
-
-.threadpin-drawer__grip {
-  color: var(--tp-text-muted);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: -2px;
 }
 
 .threadpin-drawer__header-main {
@@ -170,10 +114,6 @@ html.dark {
   background: var(--tp-bg-subtle);
   color: var(--tp-text);
   cursor: pointer;
-}
-
-.threadpin-drawer--dragging {
-  user-select: none;
 }
 
 .threadpin-drawer__title {
@@ -364,6 +304,73 @@ html.dark {
   min-width: 38px;
   background: transparent;
   color: var(--tp-text-muted);
+}
+
+.threadpin-dock__grip {
+  height: 10px;
+  margin: -2px auto 2px;
+  width: 28px;
+  border-radius: 3px;
+  background:
+    linear-gradient(var(--tp-text-muted), var(--tp-text-muted)) center/20px 2px no-repeat;
+  opacity: 0.5;
+  cursor: grab;
+}
+
+.threadpin-dock__grip:hover {
+  opacity: 0.9;
+}
+
+.threadpin-dock--dragging,
+.threadpin-dock--dragging .threadpin-dock__grip {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.threadpin-dock__pin-wrap {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+.threadpin-dock__return {
+  position: absolute;
+  right: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--tp-accent);
+  background: var(--tp-accent);
+  color: #111827;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: var(--tp-shadow);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.threadpin-dock__return:hover {
+  opacity: 0.9;
+}
+
+.threadpin-capture-line {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 50%;
+  z-index: var(--tp-z);
+  border-top: 2px dashed var(--tp-accent);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.threadpin-capture-line--visible {
+  opacity: 0.8;
 }
 
 .threadpin-restore-tab {
