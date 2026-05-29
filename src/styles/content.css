@@ -67,39 +67,6 @@ html.dark {
   transform: translateX(-50%) translateY(0);
 }
 
-/* ── Bookmark Button ────────────────────────────────────── */
-.threadpin-bookmark-btn {
-  position: fixed;
-  right: 16px;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: var(--tp-z);
-  background: var(--tp-bg);
-  color: var(--tp-text);
-  border: 1px solid var(--tp-border);
-  border-radius: var(--tp-radius);
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  font-size: 18px;
-  font-family: system-ui, -apple-system, sans-serif;
-  cursor: grab;
-  box-shadow: var(--tp-shadow);
-  touch-action: none;
-  user-select: none;
-  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
-}
-
-.threadpin-bookmark-btn:hover {
-  background: var(--tp-bg-subtle);
-}
-
-.threadpin-bookmark-btn--dragging {
-  cursor: grabbing;
-  border-color: var(--tp-accent);
-  transform: translateY(-50%) scale(1.04);
-}
-
 /* ── Return Button ──────────────────────────────────────── */
 .threadpin-return-btn {
   position: fixed;
