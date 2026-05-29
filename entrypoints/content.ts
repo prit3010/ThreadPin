@@ -63,11 +63,7 @@ export default defineContentScript({
         await saveThreadPinUiState({ drawerMode: 'closed' });
       },
       onJump: async (bookmark) => {
-        const adapter = getAdapter(new URL(window.location.href));
-        const found = await jumpToBookmark(bookmark, adapter);
-        if (!found) {
-          showToast('Could not find exact spot — returned to saved position.');
-        }
+        await jumpAndToast(bookmark);
         uiState = { ...uiState, drawerMode: 'closed' };
         await saveThreadPinUiState({ drawerMode: 'closed' });
       },
@@ -87,11 +83,7 @@ export default defineContentScript({
       },
       onReturn: async () => {
         if (!activeBookmark) return;
-        const adapter = getAdapter(new URL(window.location.href));
-        const found = await jumpToBookmark(activeBookmark, adapter);
-        if (!found) {
-          showToast('Could not find exact spot — returned to saved position.');
-        }
+        await jumpAndToast(activeBookmark);
       },
       onPositionChange: async (fraction) => {
         dockFraction = fraction;
@@ -110,6 +102,7 @@ export default defineContentScript({
       },
       onHideAll: async () => {
         drawer.close();
+        activeBookmark = null;
         uiState = { ...uiState, dockHidden: true, drawerMode: 'closed' };
         await saveThreadPinUiState({ dockHidden: true, drawerMode: 'closed' });
         dock.refresh({ hidden: true, returnVisible: false });
@@ -127,6 +120,14 @@ export default defineContentScript({
       drawer.open(
         rect ? { left: rect.left, top: rect.top, height: rect.height } : undefined
       );
+    }
+
+    async function jumpAndToast(bookmark: Bookmark): Promise<void> {
+      const adapter = getAdapter(new URL(window.location.href));
+      const found = await jumpToBookmark(bookmark, adapter);
+      if (!found) {
+        showToast('Could not find exact spot — returned to saved position.');
+      }
     }
 
     async function saveCurrentBookmark(): Promise<void> {
