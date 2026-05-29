@@ -8,21 +8,14 @@ const MAX_PER_CONVERSATION = 10;
 
 export type DrawerMode = 'closed' | 'open' | 'minimized';
 
-export interface DrawerPosition {
-  left: number;
-  top: number;
-}
-
 export interface ThreadPinUiState {
   dockHidden: boolean;
   drawerMode: DrawerMode;
-  drawerPosition: DrawerPosition | null;
 }
 
 const DEFAULT_UI_STATE: ThreadPinUiState = {
   dockHidden: false,
   drawerMode: 'closed',
-  drawerPosition: null,
 };
 
 export async function getAllBookmarks(): Promise<Bookmark[]> {
@@ -113,18 +106,6 @@ function normalizeUiState(
   return {
     dockHidden: value?.dockHidden === true,
     drawerMode,
-    drawerPosition: normalizeDrawerPosition(value?.drawerPosition),
-  };
-}
-
-function normalizeDrawerPosition(
-  value: DrawerPosition | null | undefined
-): DrawerPosition | null {
-  if (!value) return null;
-  if (!Number.isFinite(value.left) || !Number.isFinite(value.top)) return null;
-  return {
-    left: Math.max(0, Math.round(value.left)),
-    top: Math.max(0, Math.round(value.top)),
   };
 }
 
