@@ -2,6 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { initNavigation, onUrlChange } from '../../src/core/navigation';
 
 describe('navigation', () => {
+  const originalPushState = history.pushState;
+  const originalReplaceState = history.replaceState;
+  const originalLocation = window.location;
+
   beforeEach(() => {
     vi.restoreAllMocks();
   });
@@ -17,6 +21,14 @@ describe('navigation', () => {
       delete windowWithPoll.__threadpin_url_poll__;
     }
     delete windowWithPoll.__threadpin_last_url__;
+    history.pushState = originalPushState;
+    history.replaceState = originalReplaceState;
+    delete (history.pushState as any).__threadpin_patched__;
+    delete (history.replaceState as any).__threadpin_patched__;
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: originalLocation,
+    });
     vi.useRealTimers();
   });
 
@@ -28,7 +40,6 @@ describe('navigation', () => {
   });
 
   it('patches history.pushState to emit threadpin:urlchange', () => {
-    const original = history.pushState.bind(history);
     initNavigation();
 
     const listener = vi.fn();
@@ -36,11 +47,9 @@ describe('navigation', () => {
     history.pushState({}, '', '/c/new-conversation');
 
     expect(listener).toHaveBeenCalledTimes(1);
-    history.pushState = original;
   });
 
   it('patches history.replaceState to emit threadpin:urlchange', () => {
-    const original = history.replaceState.bind(history);
     initNavigation();
 
     const listener = vi.fn();
@@ -48,11 +57,9 @@ describe('navigation', () => {
     history.replaceState({}, '', '/c/same-url');
 
     expect(listener).toHaveBeenCalledTimes(1);
-    history.replaceState = original;
   });
 
   it('polls for location changes that do not emit history events', () => {
-    const originalLocation = window.location;
     vi.useFakeTimers();
 
     try {
