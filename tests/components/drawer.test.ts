@@ -17,6 +17,12 @@ function makeBookmark(overrides: Partial<Bookmark> = {}): Bookmark {
   };
 }
 
+function mockDrawerRect(): void {
+  const el = document.getElementById('threadpin-drawer')!;
+  el.getBoundingClientRect = () =>
+    ({ x: 0, y: 0, left: 0, top: 0, right: 320, bottom: 300, width: 320, height: 300, toJSON: () => undefined }) as DOMRect;
+}
+
 describe('mountDrawer', () => {
   beforeEach(() => {
     document.body.innerHTML = '';
@@ -51,68 +57,35 @@ describe('mountDrawer', () => {
     expect(document.getElementById('threadpin-drawer')!.className).toContain('threadpin-drawer--closed');
   });
 
-  it('drags the drawer by the header and reports clamped position', () => {
-    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 800 });
-    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 600 });
-    const onPositionChange = vi.fn();
+  it('opens to the left of the dock anchor', () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1000 });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 });
 
-    const drawer = mountDrawer({
-      initialPosition: { left: 100, top: 100 },
-      onJump: vi.fn(),
-      onDelete: vi.fn(),
-      onPositionChange,
-    });
+    const drawer = mountDrawer({ onJump: vi.fn(), onDelete: vi.fn() });
+    mockDrawerRect();
 
-    drawer.open();
-    const drawerEl = document.getElementById('threadpin-drawer')!;
-    drawerEl.getBoundingClientRect = () => ({
-      x: 100,
-      y: 100,
-      left: 100,
-      top: 100,
-      right: 490,
-      bottom: 420,
-      width: 390,
-      height: 320,
-      toJSON: () => undefined,
-    });
-    const header = document.querySelector<HTMLElement>('.threadpin-drawer__header')!;
-    header.dispatchEvent(new MouseEvent('mousedown', { clientX: 110, clientY: 110, bubbles: true }));
-    window.dispatchEvent(new MouseEvent('mousemove', { clientX: 900, clientY: 700, bubbles: true }));
-    window.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    drawer.open({ left: 900, top: 380, height: 120 });
 
-    expect(onPositionChange).toHaveBeenCalledTimes(1);
-    const position = onPositionChange.mock.calls[0][0];
-    expect(position.left).toBe(322);
-    expect(position.top).toBe(280);
+    const el = document.getElementById('threadpin-drawer')!;
+    // left = 900 - 12 - 320 = 568 ; top = 380 + 60 - 150 = 290
+    expect(el.style.left).toBe('568px');
+    expect(el.style.top).toBe('290px');
+    expect(el.className).not.toContain('threadpin-drawer--closed');
   });
 
-  it('clamps an initial position when opening on a smaller viewport', () => {
-    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 800 });
-    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 600 });
+  it('clamps the panel on-screen when the dock is near the top-right', () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1000 });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 400 });
 
-    const drawer = mountDrawer({
-      initialPosition: { left: 1200, top: 900 },
-      onJump: vi.fn(),
-      onDelete: vi.fn(),
-    });
-    const drawerEl = document.getElementById('threadpin-drawer')!;
-    drawerEl.getBoundingClientRect = () => ({
-      x: 1200,
-      y: 900,
-      left: 1200,
-      top: 900,
-      right: 1590,
-      bottom: 1220,
-      width: 390,
-      height: 320,
-      toJSON: () => undefined,
-    });
+    const drawer = mountDrawer({ onJump: vi.fn(), onDelete: vi.fn() });
+    mockDrawerRect();
 
-    drawer.open();
+    drawer.open({ left: 60, top: 0, height: 40 });
 
-    expect(drawerEl.style.left).toBe('322px');
-    expect(drawerEl.style.top).toBe('280px');
+    const el = document.getElementById('threadpin-drawer')!;
+    // left = 60 - 12 - 320 = -272 -> 0 ; top = 0 + 20 - 150 = -130 -> 0
+    expect(el.style.left).toBe('0px');
+    expect(el.style.top).toBe('0px');
   });
 
   it('removes the legacy drawer tab when mounting', () => {
@@ -120,23 +93,15 @@ describe('mountDrawer', () => {
     legacyTab.id = 'threadpin-drawer-tab';
     document.body.appendChild(legacyTab);
 
-    mountDrawer({
-      onJump: vi.fn(),
-      onDelete: vi.fn(),
-    });
+    mountDrawer({ onJump: vi.fn(), onDelete: vi.fn() });
 
     expect(document.getElementById('threadpin-drawer-tab')).toBeNull();
   });
 
   it('unmount removes drawer and makes later stale API calls inert', () => {
-    const drawer = mountDrawer({
-      onJump: vi.fn(),
-      onDelete: vi.fn(),
-    });
+    const drawer = mountDrawer({ onJump: vi.fn(), onDelete: vi.fn() });
 
-    drawer.refresh([
-      makeBookmark({ id: 'critical', preview: 'Critical section checklist' }),
-    ]);
+    drawer.refresh([makeBookmark({ id: 'critical', preview: 'Critical section checklist' })]);
     drawer.open();
     drawer.unmount();
 
@@ -144,68 +109,29 @@ describe('mountDrawer', () => {
 
     drawer.open();
     drawer.close();
-    drawer.refresh([
-      makeBookmark({ id: 'stale', preview: 'Stale bookmark should not render' }),
-    ]);
+    drawer.refresh([makeBookmark({ id: 'stale', preview: 'Stale bookmark should not render' })]);
 
     expect(document.getElementById('threadpin-drawer')).toBeNull();
     expect(document.body.textContent).not.toContain('Stale bookmark should not render');
   });
 
-  it('remount makes older API calls and drag listeners inert', () => {
-    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 800 });
-    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 600 });
-    const firstPositionChange = vi.fn();
-    const secondPositionChange = vi.fn();
-
-    const firstDrawer = mountDrawer({
-      initialPosition: { left: 100, top: 100 },
-      onJump: vi.fn(),
-      onDelete: vi.fn(),
-      onPositionChange: firstPositionChange,
-    });
+  it('remount makes older API calls inert', () => {
+    const firstDrawer = mountDrawer({ onJump: vi.fn(), onDelete: vi.fn() });
     firstDrawer.open();
-    const firstDrawerEl = document.getElementById('threadpin-drawer')!;
-    firstDrawerEl.getBoundingClientRect = () => ({
-      x: 100,
-      y: 100,
-      left: 100,
-      top: 100,
-      right: 490,
-      bottom: 420,
-      width: 390,
-      height: 320,
-      toJSON: () => undefined,
-    });
-    document.querySelector<HTMLElement>('.threadpin-drawer__header')!
-      .dispatchEvent(new MouseEvent('mousedown', { clientX: 110, clientY: 110, bubbles: true }));
 
-    const secondDrawer = mountDrawer({
-      onJump: vi.fn(),
-      onDelete: vi.fn(),
-      onPositionChange: secondPositionChange,
-    });
+    const secondDrawer = mountDrawer({ onJump: vi.fn(), onDelete: vi.fn() });
     secondDrawer.open();
 
     firstDrawer.close();
-    firstDrawer.refresh([
-      makeBookmark({ id: 'stale', preview: 'Stale bookmark should not render' }),
-    ]);
-    window.dispatchEvent(new MouseEvent('mousemove', { clientX: 900, clientY: 700, bubbles: true }));
-    window.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    firstDrawer.refresh([makeBookmark({ id: 'stale', preview: 'Stale bookmark should not render' })]);
 
-    expect(firstPositionChange).not.toHaveBeenCalled();
-    expect(secondPositionChange).not.toHaveBeenCalled();
     expect(document.querySelectorAll('#threadpin-drawer')).toHaveLength(1);
     expect(document.getElementById('threadpin-drawer')!.className).not.toContain('threadpin-drawer--closed');
     expect(document.body.textContent).not.toContain('Stale bookmark should not render');
   });
 
   it('filters bookmark rows by preview text', () => {
-    const drawer = mountDrawer({
-      onJump: vi.fn(),
-      onDelete: vi.fn(),
-    });
+    const drawer = mountDrawer({ onJump: vi.fn(), onDelete: vi.fn() });
 
     drawer.refresh([
       makeBookmark({ id: 'critical', preview: 'Critical section checklist' }),
@@ -221,14 +147,9 @@ describe('mountDrawer', () => {
   });
 
   it('shows a no-results state when filter matches no bookmarks', () => {
-    const drawer = mountDrawer({
-      onJump: vi.fn(),
-      onDelete: vi.fn(),
-    });
+    const drawer = mountDrawer({ onJump: vi.fn(), onDelete: vi.fn() });
 
-    drawer.refresh([
-      makeBookmark({ id: 'critical', preview: 'Critical section checklist' }),
-    ]);
+    drawer.refresh([makeBookmark({ id: 'critical', preview: 'Critical section checklist' })]);
 
     const filter = document.querySelector<HTMLInputElement>('.threadpin-drawer__filter')!;
     filter.value = 'not found';

@@ -3,7 +3,7 @@ import type { Bookmark } from '../core/types';
 
 const DRAWER_ID = 'threadpin-drawer';
 const LEGACY_TAB_ID = 'threadpin-drawer-tab';
-const DOCK_GUTTER_PX = 88;
+const ANCHOR_GAP_PX = 12;
 
 let nextInstanceId = 0;
 let activeInstanceId = 0;
@@ -25,23 +25,22 @@ function cleanupActiveDrawer(): void {
   activeCleanup = null;
 }
 
-export interface DrawerPosition {
+export interface DrawerAnchor {
   left: number;
   top: number;
+  height: number;
 }
 
 export interface DrawerOptions {
-  initialPosition?: DrawerPosition | null;
   onJump: (bookmark: Bookmark) => void;
   onDelete: (id: string) => void;
   onMinimize?: () => void;
   onClose?: () => void;
-  onPositionChange?: (position: DrawerPosition) => void;
 }
 
 export interface DrawerAPI {
   refresh(bookmarks: Bookmark[]): void;
-  open(): void;
+  open(anchor?: DrawerAnchor): void;
   close(): void;
   unmount(): void;
 }
@@ -64,16 +63,11 @@ export function mountDrawer(options: DrawerOptions): DrawerAPI {
   const instanceId = ++nextInstanceId;
   activeInstanceId = instanceId;
 
-  let isOpen = false;
   let disposed = false;
   let currentBookmarks: Bookmark[] = [];
   let filterValue = '';
-  let position = options.initialPosition ?? null;
-  let isDragging = false;
-  let dragOffsetX = 0;
-  let dragOffsetY = 0;
+  let lastAnchor: DrawerAnchor | null = null;
 
-  // Drawer panel
   const drawer = document.createElement('div');
   drawer.id = DRAWER_ID;
   drawer.className = 'threadpin-drawer threadpin-drawer--closed';
@@ -88,11 +82,6 @@ export function mountDrawer(options: DrawerOptions): DrawerAPI {
   const count = document.createElement('span');
   count.className = 'threadpin-drawer__count';
   count.textContent = '0 saved';
-
-  const grip = document.createElement('span');
-  grip.className = 'threadpin-drawer__grip';
-  grip.textContent = '::';
-  grip.setAttribute('aria-hidden', 'true');
 
   const headerMain = document.createElement('div');
   headerMain.className = 'threadpin-drawer__header-main';
@@ -111,7 +100,6 @@ export function mountDrawer(options: DrawerOptions): DrawerAPI {
   closeBtn.textContent = '×';
   closeBtn.setAttribute('aria-label', 'Close bookmarks drawer');
 
-  header.appendChild(grip);
   header.appendChild(headerMain);
   header.appendChild(minimizeBtn);
   header.appendChild(closeBtn);
@@ -135,39 +123,31 @@ export function mountDrawer(options: DrawerOptions): DrawerAPI {
     return !disposed && activeInstanceId === instanceId;
   }
 
-  function applyPosition(): void {
-    if (!isCurrent() || !position) return;
-    position = clampDrawerPosition(position.left, position.top);
-    drawer.style.left = `${position.left}px`;
-    drawer.style.top = `${position.top}px`;
+  function positionBeside(anchor: DrawerAnchor): void {
+    if (!isCurrent()) return;
+    const rect = drawer.getBoundingClientRect();
+    const width = rect.width || 320;
+    const height = rect.height || 320;
+    let left = anchor.left - ANCHOR_GAP_PX - width;
+    let top = anchor.top + anchor.height / 2 - height / 2;
+    left = Math.max(0, Math.round(left));
+    const maxTop = Math.max(0, window.innerHeight - Math.min(height, window.innerHeight));
+    top = Math.max(0, Math.min(Math.round(top), maxTop));
+    drawer.style.left = `${left}px`;
+    drawer.style.top = `${top}px`;
     drawer.style.right = 'auto';
     drawer.style.transform = 'none';
   }
 
-  function clampDrawerPosition(left: number, top: number): DrawerPosition {
-    const rect = drawer.getBoundingClientRect();
-    const width = rect.width || 390;
-    const height = rect.height || 320;
-    const maxLeft = Math.max(
-      0,
-      window.innerWidth - Math.min(width, window.innerWidth) - DOCK_GUTTER_PX
-    );
-    return {
-      left: Math.max(0, Math.min(Math.round(left), maxLeft)),
-      top: Math.max(0, Math.min(Math.round(top), window.innerHeight - Math.min(height, window.innerHeight))),
-    };
-  }
-
-  function openDrawer(): void {
+  function openDrawer(anchor?: DrawerAnchor): void {
     if (!isCurrent()) return;
-    isOpen = true;
+    if (anchor) lastAnchor = anchor;
     drawer.classList.remove('threadpin-drawer--closed');
-    applyPosition();
+    if (lastAnchor) positionBeside(lastAnchor);
   }
 
   function closeDrawer(): void {
     if (!isCurrent()) return;
-    isOpen = false;
     drawer.classList.add('threadpin-drawer--closed');
   }
 
@@ -180,8 +160,7 @@ export function mountDrawer(options: DrawerOptions): DrawerAPI {
     if (bookmarks.length === 0) {
       const empty = document.createElement('p');
       empty.className = 'threadpin-drawer__empty';
-      empty.textContent =
-        'No bookmarks yet. Click PIN to save your place.';
+      empty.textContent = 'No bookmarks yet. Click PIN to save your place.';
       list.appendChild(empty);
       return;
     }
@@ -255,26 +234,10 @@ export function mountDrawer(options: DrawerOptions): DrawerAPI {
     });
   }
 
-  const handleMouseMove = (event: MouseEvent) => {
-    if (!isCurrent() || !isDragging) return;
-    position = clampDrawerPosition(event.clientX - dragOffsetX, event.clientY - dragOffsetY);
-    applyPosition();
-  };
-
-  const handleMouseUp = () => {
-    if (!isCurrent() || !isDragging) return;
-    isDragging = false;
-    drawer.classList.remove('threadpin-drawer--dragging');
-    if (position) options.onPositionChange?.(position);
-  };
-
   function cleanup(): void {
     if (disposed) return;
     disposed = true;
-    isDragging = false;
     stopKeepingMounted();
-    window.removeEventListener('mousemove', handleMouseMove);
-    window.removeEventListener('mouseup', handleMouseUp);
     drawer.remove();
     if (activeInstanceId === instanceId) {
       activeInstanceId = 0;
@@ -282,7 +245,6 @@ export function mountDrawer(options: DrawerOptions): DrawerAPI {
     }
   }
 
-  // Initial state
   renderList([]);
 
   filter.addEventListener('input', () => {
@@ -303,18 +265,6 @@ export function mountDrawer(options: DrawerOptions): DrawerAPI {
     options.onClose?.();
   });
 
-  header.addEventListener('mousedown', (event) => {
-    if (!isCurrent()) return;
-    if ((event.target as HTMLElement).closest('button')) return;
-    const rect = drawer.getBoundingClientRect();
-    isDragging = true;
-    dragOffsetX = event.clientX - rect.left;
-    dragOffsetY = event.clientY - rect.top;
-    drawer.classList.add('threadpin-drawer--dragging');
-  });
-
-  window.addEventListener('mousemove', handleMouseMove);
-  window.addEventListener('mouseup', handleMouseUp);
   activeCleanup = cleanup;
 
   const api: DrawerAPI = {
