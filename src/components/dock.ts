@@ -99,7 +99,16 @@ export function mountDock(options: DockOptions): DockAPI {
     if (!dock || !isCurrent()) return;
     const height = viewportHeight();
     const target = positionFraction * height;
-    const pinOffset = pinEl ? pinEl.offsetTop + pinEl.offsetHeight / 2 : 0;
+    // pinEl's offsetParent is the position:relative .threadpin-dock__pin-wrap
+    // (which exists so the return icon can anchor to it), so pinEl.offsetTop is
+    // NOT relative to the dock. Measure the PIN center relative to the dock via
+    // getBoundingClientRect so the PIN lands exactly on the capture line.
+    let pinOffset = 0;
+    if (pinEl) {
+      const pinRect = pinEl.getBoundingClientRect();
+      const dockRect = dock.getBoundingClientRect();
+      pinOffset = pinRect.top - dockRect.top + pinRect.height / 2;
+    }
     const dockHeight = dock.offsetHeight || 0;
     let top = target - pinOffset;
     const maxTop = Math.max(0, height - dockHeight);
