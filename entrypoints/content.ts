@@ -94,6 +94,8 @@ export default defineContentScript({
         if (!found) {
           showToast('Could not find exact spot — returned to saved position.');
         }
+        uiState = { ...uiState, drawerMode: 'closed' };
+        await saveThreadPinUiState({ drawerMode: 'closed' });
       },
       onDelete: async (id) => {
         await deleteBookmark(id);
@@ -120,6 +122,7 @@ export default defineContentScript({
       },
       onHideAll: async () => {
         drawer.close();
+        returnBtn.hide();
         uiState = { ...uiState, dockHidden: true, drawerMode: 'closed' };
         await saveThreadPinUiState({ dockHidden: true, drawerMode: 'closed' });
         dock.refresh({ hidden: true });
@@ -128,6 +131,7 @@ export default defineContentScript({
         uiState = { ...uiState, dockHidden: false, drawerMode: 'closed' };
         await saveThreadPinUiState({ dockHidden: false, drawerMode: 'closed' });
         dock.refresh({ hidden: false });
+        await refreshConversationUi();
       },
     });
 
@@ -158,6 +162,10 @@ export default defineContentScript({
       currentBookmarkCount = bookmarks.length;
       drawer.refresh(bookmarks);
       dock.refresh({ bookmarkCount: currentBookmarkCount, hidden: uiState.dockHidden });
+      if (uiState.dockHidden) {
+        returnBtn.hide();
+        return;
+      }
 
       const active = await getActiveBookmark(conversationId);
       if (active) {
