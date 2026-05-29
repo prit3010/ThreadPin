@@ -83,7 +83,7 @@ describe('mountDrawer', () => {
 
     expect(onPositionChange).toHaveBeenCalledTimes(1);
     const position = onPositionChange.mock.calls[0][0];
-    expect(position.left).toBe(410);
+    expect(position.left).toBe(322);
     expect(position.top).toBe(280);
   });
 
@@ -111,7 +111,7 @@ describe('mountDrawer', () => {
 
     drawer.open();
 
-    expect(drawerEl.style.left).toBe('410px');
+    expect(drawerEl.style.left).toBe('322px');
     expect(drawerEl.style.top).toBe('280px');
   });
 

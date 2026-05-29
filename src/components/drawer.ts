@@ -3,6 +3,7 @@ import type { Bookmark } from '../core/types';
 
 const DRAWER_ID = 'threadpin-drawer';
 const LEGACY_TAB_ID = 'threadpin-drawer-tab';
+const DOCK_GUTTER_PX = 88;
 
 let nextInstanceId = 0;
 let activeInstanceId = 0;
@@ -147,8 +148,12 @@ export function mountDrawer(options: DrawerOptions): DrawerAPI {
     const rect = drawer.getBoundingClientRect();
     const width = rect.width || 390;
     const height = rect.height || 320;
+    const maxLeft = Math.max(
+      0,
+      window.innerWidth - Math.min(width, window.innerWidth) - DOCK_GUTTER_PX
+    );
     return {
-      left: Math.max(0, Math.min(Math.round(left), window.innerWidth - Math.min(width, window.innerWidth))),
+      left: Math.max(0, Math.min(Math.round(left), maxLeft)),
       top: Math.max(0, Math.min(Math.round(top), window.innerHeight - Math.min(height, window.innerHeight))),
     };
   }
