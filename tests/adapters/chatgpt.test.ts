@@ -30,6 +30,15 @@ describe('chatgptAdapter', () => {
     expect(chatgptAdapter.getConversationId(url)).toBe('chatgpt:/');
   });
 
+  it('marks chatgpt root and new-chat paths as unstable', () => {
+    expect(chatgptAdapter.getStableConversationId?.(new URL('https://chatgpt.com/'))).toBeNull();
+    expect(chatgptAdapter.getStableConversationId?.(new URL('https://chatgpt.com/?model=gpt-5'))).toBeNull();
+  });
+
+  it('returns stable chatgpt conversation id for /c/id urls', () => {
+    expect(chatgptAdapter.getStableConversationId?.(new URL('https://chatgpt.com/c/abc-123'))).toBe('chatgpt:abc-123');
+  });
+
   it('returns [data-message-id] as message container selector', () => {
     expect(chatgptAdapter.getMessageContainerSelector()).toBe('[data-message-id]');
   });

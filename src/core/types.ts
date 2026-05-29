@@ -22,6 +22,7 @@ export interface Adapter {
   id: string;
   matches(url: URL): boolean;
   getConversationId(url: URL): string;
+  getStableConversationId?(url: URL): string | null;
   getMessageContainerSelector(): string;
   getParagraphSelector(): string;
 }

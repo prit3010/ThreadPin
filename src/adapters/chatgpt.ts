@@ -11,8 +11,12 @@ export const chatgptAdapter: Adapter = {
   },
 
   getConversationId(url: URL): string {
+    return this.getStableConversationId?.(url) ?? `chatgpt:${url.pathname}`;
+  },
+
+  getStableConversationId(url: URL): string | null {
     const match = url.pathname.match(/\/c\/([a-zA-Z0-9-]+)/);
-    return `chatgpt:${match ? match[1] : url.pathname}`;
+    return match ? `chatgpt:${match[1]}` : null;
   },
 
   getMessageContainerSelector(): string {
