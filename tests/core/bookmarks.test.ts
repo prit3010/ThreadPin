@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { captureAnchor, createBookmark } from '../../src/core/bookmarks';
 import { chatgptAdapter } from '../../src/adapters/chatgpt';
+import { claudeAdapter } from '../../src/adapters/claude';
 import type { AnchorData } from '../../src/core/types';
 
 function rect(top: number, bottom: number, width = 100): DOMRect {
@@ -113,6 +114,33 @@ describe('captureAnchor', () => {
     expect(anchor.preview).toContain('visible code block');
   });
 
+  it('does not borrow dataStart from a different text block than the captured preview', () => {
+    document.body.innerHTML = `
+      <div data-message-id="msg-transient" data-message-author-role="assistant">
+        <p data-start="10">Parser docs that were rendered earlier.</p>
+        <p>Now let me update the setup guide.</p>
+      </div>
+    `;
+
+    const message = document.querySelector('[data-message-id="msg-transient"]')!;
+    const anchored = document.querySelector('[data-start="10"]')!;
+    const transient = [...document.querySelectorAll('p')].find(
+      (p) => p.textContent === 'Now let me update the setup guide.'
+    )!;
+
+    Element.prototype.getBoundingClientRect = vi.fn(function (this: Element) {
+      if (this === message) return rect(100, 500);
+      if (this === anchored) return rect(150, 190);
+      if (this === transient) return rect(205, 245);
+      return rect(0, 0, 0);
+    });
+
+    const anchor = captureAnchor(chatgptAdapter, 220);
+
+    expect(anchor.preview).toBe('Now let me update the setup guide.');
+    expect(anchor.dataStart).toBeNull();
+  });
+
   it('captures selectedText when user has text highlighted', () => {
     window.getSelection = vi.fn().mockReturnValue({
       toString: () => 'highlighted text',
@@ -170,5 +198,128 @@ describe('createBookmark', () => {
     expect(bookmark.id).toBeTruthy();
     expect(typeof bookmark.id).toBe('string');
     expect(bookmark.createdAt).toBeGreaterThan(0);
+  });
+});
+
+describe('captureAnchor on claude.ai', () => {
+  beforeEach(() => {
+    document.body.innerHTML = `
+      <div data-autoscroll-container="true">
+        <div data-testid="user-message">
+          <p class="whitespace-pre-wrap">User question text here.</p>
+        </div>
+        <div class="standard-markdown">
+          <p class="font-claude-response-body">Assistant prose paragraph reply.</p>
+          <pre class="code-block__code"><code class="language-yaml"><span>rows: 12</span><span>source: invoice.pdf</span></code></pre>
+        </div>
+      </div>
+    `;
+    Object.defineProperty(window, 'innerHeight', { value: 800, writable: true });
+    Object.defineProperty(window, 'scrollY', { value: 0, writable: true });
+    window.getSelection = vi.fn().mockReturnValue({ toString: () => '' });
+  });
+
+  it('reads scroll position from the autoscroll container, not the window', () => {
+    const scroller = document.querySelector('[data-autoscroll-container]') as HTMLElement;
+    Object.defineProperty(scroller, 'scrollTop', { value: 742, configurable: true });
+    Element.prototype.getBoundingClientRect = vi.fn().mockReturnValue(rect(100, 200));
+
+    const anchor = captureAnchor(claudeAdapter);
+    expect(anchor.scrollY).toBe(742);
+  });
+
+  it('captures empty messageId and null dataStart (no claude attributes)', () => {
+    Element.prototype.getBoundingClientRect = vi.fn().mockReturnValue(rect(100, 200));
+
+    const anchor = captureAnchor(claudeAdapter);
+    expect(anchor.messageId).toBe('');
+    expect(anchor.dataStart).toBeNull();
+  });
+
+  it('captures the specific code line as preview when reading inside a code block', () => {
+    const userMsg = document.querySelector('[data-testid="user-message"]')!;
+    const assistant = document.querySelector('.standard-markdown')!;
+    const prose = assistant.querySelector('p')!;
+    const codeLines = assistant.querySelectorAll('pre code > span');
+    const line0 = codeLines[0]; // 'rows: 12'
+    const line1 = codeLines[1]; // 'source: invoice.pdf'
+
+    Element.prototype.getBoundingClientRect = vi.fn(function (this: Element) {
+      if (this === userMsg) return rect(-400, -300);
+      if (this === assistant) return rect(-200, 700);
+      if (this === prose) return rect(-150, -100);
+      if (this === line0) return rect(380, 420); // centered on viewportY = 400
+      if (this === line1) return rect(600, 640);
+      return rect(0, 0, 0);
+    });
+
+    const anchor = captureAnchor(claudeAdapter, 400);
+    expect(anchor.preview).toBe('rows: 12');
+  });
+
+  it('pins the tall assistant message the capture line sits inside, not a smaller closer-centered neighbor', () => {
+    // Reproduces the observed bug: the capture line is visually inside a tall
+    // assistant answer, but a small user message just below it has a nearer
+    // *center*, so the old clamped-center metric wrongly selected the user msg.
+    document.body.innerHTML = `
+      <div data-autoscroll-container="true">
+        <div class="standard-markdown">
+          <p class="font-claude-response-body">The assistant answer the user is reading.</p>
+        </div>
+        <div data-testid="user-message">
+          <p class="whitespace-pre-wrap">a short follow-up question</p>
+        </div>
+      </div>
+    `;
+    const assistant = document.querySelector('.standard-markdown')!;
+    const assistantP = assistant.querySelector('p')!;
+    const user = document.querySelector('[data-testid="user-message"]')!;
+    const userP = user.querySelector('p')!;
+
+    // Capture line at 200 (innerHeight 800). The assistant container spans
+    // 100..900 so the line is INSIDE it, but its clamped visible center is 450
+    // (far). The small user message at 240..300 has center 270 — nearer the
+    // line under the old metric, so it used to win incorrectly.
+    Element.prototype.getBoundingClientRect = vi.fn(function (this: Element) {
+      if (this === assistant) return rect(100, 900);
+      if (this === assistantP) return rect(140, 200);
+      if (this === user) return rect(240, 300);
+      if (this === userP) return rect(250, 290);
+      return rect(0, 0, 0);
+    });
+
+    const anchor = captureAnchor(claudeAdapter, 200);
+    expect(anchor.preview).toBe('The assistant answer the user is reading.');
+  });
+
+  it('captures the table cell at the capture line, not the heading above the table', () => {
+    // Reproduces the observed bug: pinning a table row logged the <h3> heading
+    // above the table because table cells were not in the text-block selector.
+    document.body.innerHTML = `
+      <div data-autoscroll-container="true">
+        <div class="standard-markdown">
+          <h3>Here's the breakdown:</h3>
+          <table><tbody>
+            <tr>
+              <td>Part 2 — Skills</td><td>196 lines</td><td>Create 3 parser skills</td>
+            </tr>
+          </tbody></table>
+        </div>
+      </div>
+    `;
+    const assistant = document.querySelector('.standard-markdown')!;
+    const heading = assistant.querySelector('h3')!;
+    const cells = assistant.querySelectorAll('td');
+
+    // Capture line at 200 sits on the table row; the heading is above it.
+    Element.prototype.getBoundingClientRect = vi.fn(function (this: Element) {
+      if (this === assistant) return rect(-100, 500);
+      if (this === heading) return rect(-50, 0);
+      if (this === cells[0] || this === cells[1] || this === cells[2]) return rect(180, 240);
+      return rect(0, 0, 0);
+    });
+
+    const anchor = captureAnchor(claudeAdapter, 200);
+    expect(anchor.preview).toBe('Part 2 — Skills');
   });
 });

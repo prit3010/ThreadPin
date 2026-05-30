@@ -29,11 +29,13 @@ export async function jumpToBookmark(
       return true;
     }
 
-    if (bookmark.selectedText) {
+    const inMessageAnchorText = bookmark.selectedText ?? bookmark.preview;
+    if (inMessageAnchorText) {
       const foundInMessage = findTextInRoot(
-        bookmark.selectedText,
+        inMessageAnchorText,
         messageEl,
-        adapter.getParagraphSelector()
+        adapter.getTextBlockSelector?.() ?? 'p, pre, li, code',
+        adapter.getMessageContainerSelector()
       );
       if (foundInMessage) {
         foundInMessage.scrollIntoView({ behavior: 'instant', block: 'center' });
@@ -47,10 +49,15 @@ export async function jumpToBookmark(
     return true;
   }
 
-  // Strategy 2: search for selectedText in page containers
-  if (bookmark.selectedText) {
+  // Strategy 2: search for anchor text (selection, else preview) in the page
+  // Default block set mirrors captureAnchor's preview selector ('p, pre, li, code')
+  // so adapters without a custom text-block selector search the same granularity
+  // here as they captured. 'code' lets text searches land on inline code too.
+  const anchorText = bookmark.selectedText ?? bookmark.preview;
+  if (anchorText) {
     const found = findTextInPage(
-      bookmark.selectedText,
+      anchorText,
+      adapter.getTextBlockSelector?.() ?? 'p, pre, li, code',
       adapter.getMessageContainerSelector()
     );
     if (found) {
@@ -60,8 +67,13 @@ export async function jumpToBookmark(
     }
   }
 
-  // Strategy 3: raw scrollY fallback
-  window.scrollTo({ top: bookmark.scrollY, behavior: 'smooth' });
+  // Strategy 3: raw scroll-position fallback
+  const scroller = adapter.getScrollContainer?.();
+  if (scroller) {
+    scroller.scrollTo({ top: bookmark.scrollY, behavior: 'smooth' });
+  } else {
+    window.scrollTo({ top: bookmark.scrollY, behavior: 'smooth' });
+  }
   return false;
 }
 
@@ -84,21 +96,23 @@ function findElementByAttribute(
 
 function findTextInPage(
   text: string,
+  textBlockSelector: string,
   containerSelector: string
 ): HTMLElement | null {
-  return findTextInRoot(text, document, containerSelector);
+  return findTextInRoot(text, document, textBlockSelector, containerSelector);
 }
 
 function findTextInRoot(
   text: string,
   root: ParentNode,
+  textBlockSelector: string,
   containerSelector: string
 ): HTMLElement | null {
   const needle = text.slice(0, 50).toLowerCase();
   if (!needle) return null;
 
   // Search within likely text blocks first for a more precise landing spot.
-  const textBlocks = root.querySelectorAll('p, pre, li');
+  const textBlocks = root.querySelectorAll(textBlockSelector);
   for (const block of textBlocks) {
     if (block.textContent?.toLowerCase().includes(needle)) {
       return block as HTMLElement;
