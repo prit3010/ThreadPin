@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { captureAnchor, createBookmark } from '../../src/core/bookmarks';
 import { chatgptAdapter } from '../../src/adapters/chatgpt';
+import { claudeAdapter } from '../../src/adapters/claude';
 import type { AnchorData } from '../../src/core/types';
 
 function rect(top: number, bottom: number, width = 100): DOMRect {
@@ -170,5 +171,62 @@ describe('createBookmark', () => {
     expect(bookmark.id).toBeTruthy();
     expect(typeof bookmark.id).toBe('string');
     expect(bookmark.createdAt).toBeGreaterThan(0);
+  });
+});
+
+describe('captureAnchor on claude.ai', () => {
+  beforeEach(() => {
+    document.body.innerHTML = `
+      <div data-autoscroll-container="true">
+        <div data-testid="user-message">
+          <p class="whitespace-pre-wrap">User question text here.</p>
+        </div>
+        <div class="standard-markdown">
+          <p class="font-claude-response-body">Assistant prose paragraph reply.</p>
+          <pre class="code-block__code"><code class="language-yaml"><span>rows: 12</span><span>source: invoice.pdf</span></code></pre>
+        </div>
+      </div>
+    `;
+    Object.defineProperty(window, 'innerHeight', { value: 800, writable: true });
+    Object.defineProperty(window, 'scrollY', { value: 0, writable: true });
+    window.getSelection = vi.fn().mockReturnValue({ toString: () => '' });
+  });
+
+  it('reads scroll position from the autoscroll container, not the window', () => {
+    const scroller = document.querySelector('[data-autoscroll-container]') as HTMLElement;
+    Object.defineProperty(scroller, 'scrollTop', { value: 742, configurable: true });
+    Element.prototype.getBoundingClientRect = vi.fn().mockReturnValue(rect(100, 200));
+
+    const anchor = captureAnchor(claudeAdapter);
+    expect(anchor.scrollY).toBe(742);
+  });
+
+  it('captures empty messageId and null dataStart (no claude attributes)', () => {
+    Element.prototype.getBoundingClientRect = vi.fn().mockReturnValue(rect(100, 200));
+
+    const anchor = captureAnchor(claudeAdapter);
+    expect(anchor.messageId).toBe('');
+    expect(anchor.dataStart).toBeNull();
+  });
+
+  it('captures the specific code line as preview when reading inside a code block', () => {
+    const userMsg = document.querySelector('[data-testid="user-message"]')!;
+    const assistant = document.querySelector('.standard-markdown')!;
+    const prose = assistant.querySelector('p')!;
+    const codeLines = assistant.querySelectorAll('pre code > span');
+    const line0 = codeLines[0]; // 'rows: 12'
+    const line1 = codeLines[1]; // 'source: invoice.pdf'
+
+    Element.prototype.getBoundingClientRect = vi.fn(function (this: Element) {
+      if (this === userMsg) return rect(-400, -300);
+      if (this === assistant) return rect(-200, 700);
+      if (this === prose) return rect(-150, -100);
+      if (this === line0) return rect(380, 420); // centered on viewportY = 400
+      if (this === line1) return rect(600, 640);
+      return rect(0, 0, 0);
+    });
+
+    const anchor = captureAnchor(claudeAdapter, 400);
+    expect(anchor.preview).toBe('rows: 12');
   });
 });

@@ -7,6 +7,10 @@ export function captureAnchor(
   const selection = window.getSelection();
   const selectedText = selection?.toString().trim() || null;
 
+  const scroller = adapter.getScrollContainer?.();
+  const scrollY = scroller ? (scroller as HTMLElement).scrollTop : window.scrollY;
+  const textBlockSelector = adapter.getTextBlockSelector?.() ?? 'p, pre, li, code';
+
   // Find the message container closest to the viewport center.
   // Only consider containers that are at least partially visible in the
   // viewport (rect.bottom > 0 && rect.top < innerHeight) so a tall header
@@ -48,7 +52,7 @@ export function captureAnchor(
     return {
       messageId: '',
       dataStart: 0,
-      scrollY: window.scrollY,
+      scrollY,
       selectedText,
       preview: selectedText?.slice(0, 120) ?? '',
     };
@@ -73,17 +77,17 @@ export function captureAnchor(
     : NaN;
   const dataStart = Number.isFinite(parsedDataStart) ? parsedDataStart : null;
 
-  const visibleTextEl = closestToViewportCenter(
-    Array.from(nearestContainer.querySelectorAll('p, pre, li, code'))
+  const nearestTextBlock = closestToViewportY(
+    Array.from(nearestContainer.querySelectorAll(textBlockSelector))
       .filter(isVisibleInViewport),
     viewportY
   );
 
-  // Preview: prefer selection → nearest paragraph → container text (code block fallback)
+  // Preview: prefer selection → nearest text block → nearest paragraph → container text (code block fallback)
   const rawPreview =
     selectedText ||
+    nearestTextBlock?.textContent ||
     nearestP?.textContent ||
-    visibleTextEl?.textContent ||
     nearestContainer.textContent?.trim().slice(0, 120) ||
     '';
   const preview = rawPreview.trim().slice(0, 120);
@@ -91,7 +95,7 @@ export function captureAnchor(
   return {
     messageId,
     dataStart,
-    scrollY: window.scrollY,
+    scrollY,
     selectedText: selectedText ? selectedText.slice(0, 500) : null,
     preview,
   };
