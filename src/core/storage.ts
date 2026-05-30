@@ -3,7 +3,20 @@ import type { Bookmark } from './types';
 
 const STORAGE_KEY = 'threadpin_bookmarks';
 const HANDLE_POSITION_KEY = 'threadpin_bookmark_handle_position';
+const UI_STATE_KEY = 'threadpin_ui_state';
 const MAX_PER_CONVERSATION = 10;
+
+export type DrawerMode = 'closed' | 'open' | 'minimized';
+
+export interface ThreadPinUiState {
+  dockHidden: boolean;
+  drawerMode: DrawerMode;
+}
+
+const DEFAULT_UI_STATE: ThreadPinUiState = {
+  dockHidden: false,
+  drawerMode: 'closed',
+};
 
 export async function getAllBookmarks(): Promise<Bookmark[]> {
   const result = await chrome.storage.local.get(STORAGE_KEY);
@@ -63,6 +76,37 @@ export async function saveBookmarkHandlePosition(position: number): Promise<void
   await chrome.storage.local.set({
     [HANDLE_POSITION_KEY]: clampNormalized(position),
   });
+}
+
+export async function getThreadPinUiState(): Promise<ThreadPinUiState> {
+  const result = await chrome.storage.local.get(UI_STATE_KEY);
+  const stored = result[UI_STATE_KEY] as Partial<ThreadPinUiState> | undefined;
+  return normalizeUiState(stored);
+}
+
+export async function saveThreadPinUiState(
+  update: Partial<ThreadPinUiState>
+): Promise<void> {
+  const current = await getThreadPinUiState();
+  await chrome.storage.local.set({
+    [UI_STATE_KEY]: normalizeUiState({ ...current, ...update }),
+  });
+}
+
+function normalizeUiState(
+  value: Partial<ThreadPinUiState> | undefined
+): ThreadPinUiState {
+  const drawerMode =
+    value?.drawerMode === 'open' ||
+    value?.drawerMode === 'minimized' ||
+    value?.drawerMode === 'closed'
+      ? value.drawerMode
+      : DEFAULT_UI_STATE.drawerMode;
+
+  return {
+    dockHidden: value?.dockHidden === true,
+    drawerMode,
+  };
 }
 
 function clampNormalized(value: number): number {

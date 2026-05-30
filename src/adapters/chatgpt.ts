@@ -1,5 +1,10 @@
 import type { Adapter } from '../core/types';
 
+function getStableChatGptConversationId(url: URL): string | null {
+  const match = url.pathname.match(/\/c\/([a-zA-Z0-9-]+)/);
+  return match ? `chatgpt:${match[1]}` : null;
+}
+
 export const chatgptAdapter: Adapter = {
   id: 'chatgpt',
 
@@ -11,8 +16,11 @@ export const chatgptAdapter: Adapter = {
   },
 
   getConversationId(url: URL): string {
-    const match = url.pathname.match(/\/c\/([a-zA-Z0-9-]+)/);
-    return `chatgpt:${match ? match[1] : url.pathname}`;
+    return getStableChatGptConversationId(url) ?? `chatgpt:${url.pathname}`;
+  },
+
+  getStableConversationId(url: URL): string | null {
+    return getStableChatGptConversationId(url);
   },
 
   getMessageContainerSelector(): string {

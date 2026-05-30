@@ -9,18 +9,21 @@ import {
   deleteBookmark,
   getConversationBookmarks,
   getActiveBookmark,
+  getThreadPinUiState,
+  saveThreadPinUiState,
   getBookmarkHandlePosition,
   saveBookmarkHandlePosition,
 } from '../src/core/storage';
-import { mountBookmarkButton } from '../src/components/bookmark-button';
+import {
+  getConversationIdForRender,
+  getConversationIdForSave,
+} from '../src/core/conversation';
+import { mountDock } from '../src/components/dock';
 import { mountDrawer } from '../src/components/drawer';
-import { mountReturnButton } from '../src/components/return-button';
 import { showToast } from '../src/components/toast';
+import type { Bookmark } from '../src/core/types';
 
 // ── Wait for ChatGPT's React app to finish hydrating ─────────────────────
-// ChatGPT (Next.js) replaces document.body content ~2s after the content
-// script runs. We wait for <main> to appear — that's ChatGPT's signal that
-// the app is interactive and won't wipe our appended elements.
 function waitForChatGPT(): Promise<void> {
   return new Promise((resolve) => {
     if (document.querySelector('main')) {
@@ -37,104 +40,160 @@ function waitForChatGPT(): Promise<void> {
   });
 }
 
-// ── Guard: re-append element if ChatGPT ever removes it ──────────────────
-function keepMounted(el: HTMLElement): void {
-  const observer = new MutationObserver(() => {
-    if (!document.body.contains(el)) {
-      document.body.appendChild(el);
-    }
-  });
-  observer.observe(document.body, { childList: true, subtree: false });
-}
-
 export default defineContentScript({
   matches: ['https://chatgpt.com/*', 'https://chat.openai.com/*'],
   async main() {
     console.log('[ThreadPin] loaded');
 
-    // Wait for ChatGPT to finish hydrating before mounting any UI
     await waitForChatGPT();
 
-    // ── Mount persistent UI ───────────────────────────────
-    const returnBtn = mountReturnButton({
-      onReturn: async (bookmark) => {
-        const adapter = getAdapter(new URL(window.location.href));
-        const found = await jumpToBookmark(bookmark, adapter);
-        if (!found) {
-          showToast('Could not find exact spot — returned to saved position.');
-        }
-      },
-    });
+    let currentConversationId: string | null = null;
+    let currentBookmarkCount = 0;
+    let activeBookmark: Bookmark | null = null;
+    let uiState = await getThreadPinUiState();
+    let dockFraction = await getBookmarkHandlePosition();
 
     const drawer = mountDrawer({
+      onMinimize: async () => {
+        uiState = { ...uiState, drawerMode: 'minimized' };
+        await saveThreadPinUiState({ drawerMode: 'minimized' });
+      },
+      onClose: async () => {
+        uiState = { ...uiState, drawerMode: 'closed' };
+        await saveThreadPinUiState({ drawerMode: 'closed' });
+      },
       onJump: async (bookmark) => {
-        const adapter = getAdapter(new URL(window.location.href));
-        const found = await jumpToBookmark(bookmark, adapter);
-        if (!found) {
-          showToast('Could not find exact spot — returned to saved position.');
-        }
+        await jumpAndToast(bookmark);
+        uiState = { ...uiState, drawerMode: 'closed' };
+        await saveThreadPinUiState({ drawerMode: 'closed' });
       },
       onDelete: async (id) => {
         await deleteBookmark(id);
-        await refreshDrawer();
-        await syncReturnButton();
+        await refreshConversationUi();
       },
     });
 
-    const initialHandlePosition = await getBookmarkHandlePosition();
-    mountBookmarkButton({
-      initialPosition: initialHandlePosition,
-      onPositionChange: async (position) => {
-        await saveBookmarkHandlePosition(position);
+    const dock = mountDock({
+      bookmarkCount: currentBookmarkCount,
+      hidden: uiState.dockHidden,
+      positionFraction: dockFraction,
+      returnVisible: false,
+      onSave: async () => {
+        await saveCurrentBookmark();
       },
-      onClick: async ({ viewportY }) => {
-        const url = new URL(window.location.href);
-        const adapter = getAdapter(url);
-        const conversationId = adapter.getConversationId(url);
-        const anchor = captureAnchor(adapter, viewportY);
-        const bookmark = createBookmark(conversationId, url.hostname, anchor);
-
-        await saveBookmark(bookmark);
-        showToast('Bookmarked this spot.');
-        returnBtn.show(bookmark);
-        await refreshDrawer();
+      onReturn: async () => {
+        if (!activeBookmark) return;
+        await jumpAndToast(activeBookmark);
+      },
+      onPositionChange: async (fraction) => {
+        dockFraction = fraction;
+        await saveBookmarkHandlePosition(fraction);
+      },
+      onToggleList: async () => {
+        if (uiState.drawerMode === 'open') {
+          drawer.close();
+          uiState = { ...uiState, drawerMode: 'closed' };
+          await saveThreadPinUiState({ drawerMode: 'closed' });
+          return;
+        }
+        openDrawerBesideDock();
+        uiState = { ...uiState, drawerMode: 'open', dockHidden: false };
+        await saveThreadPinUiState({ drawerMode: 'open', dockHidden: false });
+      },
+      onHideAll: async () => {
+        drawer.close();
+        activeBookmark = null;
+        uiState = { ...uiState, dockHidden: true, drawerMode: 'closed' };
+        await saveThreadPinUiState({ dockHidden: true, drawerMode: 'closed' });
+        dock.refresh({ hidden: true, returnVisible: false });
+      },
+      onRestore: async () => {
+        uiState = { ...uiState, dockHidden: false, drawerMode: 'closed' };
+        await saveThreadPinUiState({ dockHidden: false, drawerMode: 'closed' });
+        dock.refresh({ hidden: false });
+        await refreshConversationUi();
       },
     });
 
-    // ── Helper: refresh drawer with current conversation's bookmarks ──
-    async function refreshDrawer(): Promise<void> {
-      const url = new URL(window.location.href);
-      const adapter = getAdapter(url);
-      const conversationId = adapter.getConversationId(url);
-      const bookmarks = await getConversationBookmarks(conversationId);
-      drawer.refresh(bookmarks);
+    function openDrawerBesideDock(): void {
+      const rect = dock.getAnchorRect();
+      drawer.open(
+        rect ? { left: rect.left, top: rect.top, height: rect.height } : undefined
+      );
     }
 
-    // ── Helper: sync return button to the active bookmark ──
-    async function syncReturnButton(): Promise<void> {
+    async function jumpAndToast(bookmark: Bookmark): Promise<void> {
+      const adapter = getAdapter(new URL(window.location.href));
+      const found = await jumpToBookmark(bookmark, adapter);
+      if (!found) {
+        showToast('Could not find exact spot — returned to saved position.');
+      }
+    }
+
+    async function saveCurrentBookmark(): Promise<void> {
       const url = new URL(window.location.href);
       const adapter = getAdapter(url);
-      const conversationId = adapter.getConversationId(url);
-      const active = await getActiveBookmark(conversationId);
-      if (active) {
-        returnBtn.show(active);
-      } else {
-        returnBtn.hide();
+      const conversationId = getConversationIdForSave(adapter, url);
+      if (!conversationId) {
+        showToast('Open a saved chat before bookmarking.');
+        return;
       }
+
+      const viewportY = Math.round(dockFraction * window.innerHeight);
+      const anchor = captureAnchor(adapter, viewportY);
+      const bookmark = createBookmark(conversationId, url.hostname, anchor);
+
+      await saveBookmark(bookmark);
+      showToast('Bookmarked this spot.');
+      await refreshConversationUi();
+    }
+
+    async function refreshConversationUi(): Promise<void> {
+      const url = new URL(window.location.href);
+      const adapter = getAdapter(url);
+      const conversationId = getConversationIdForRender(adapter, url);
+      currentConversationId = conversationId;
+      const bookmarks = await getConversationBookmarks(conversationId);
+      currentBookmarkCount = bookmarks.length;
+      drawer.refresh(bookmarks);
+
+      if (uiState.dockHidden) {
+        activeBookmark = null;
+        dock.refresh({
+          bookmarkCount: currentBookmarkCount,
+          hidden: true,
+          returnVisible: false,
+        });
+        return;
+      }
+
+      activeBookmark = await getActiveBookmark(conversationId);
+      dock.refresh({
+        bookmarkCount: currentBookmarkCount,
+        hidden: false,
+        returnVisible: activeBookmark !== null,
+      });
+    }
+
+    async function handleConversationMaybeChanged(): Promise<void> {
+      const url = new URL(window.location.href);
+      const nextConversationId = getConversationIdForRender(getAdapter(url), url);
+      if (nextConversationId === currentConversationId) return;
+      activeBookmark = null;
+      dock.refresh({ returnVisible: false });
+      await refreshConversationUi();
     }
 
     // ── Handle conversation switches (SPA navigation) ─────
     initNavigation();
     onUrlChange(async () => {
-      // Immediately hide the return button — we're in a new conversation
-      returnBtn.hide();
-      // Refresh drawer and return button for the new conversation
-      await refreshDrawer();
-      await syncReturnButton();
+      await handleConversationMaybeChanged();
     });
 
     // ── Initial load ──────────────────────────────────────
-    await refreshDrawer();
-    await syncReturnButton();
+    await refreshConversationUi();
+    if (uiState.drawerMode === 'open' && !uiState.dockHidden) {
+      openDrawerBesideDock();
+    }
   },
 });

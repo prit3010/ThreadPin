@@ -1,7 +1,15 @@
 // src/components/drawer.ts
 import type { Bookmark } from '../core/types';
 
-function keepMounted(el: HTMLElement): void {
+const DRAWER_ID = 'threadpin-drawer';
+const LEGACY_TAB_ID = 'threadpin-drawer-tab';
+const ANCHOR_GAP_PX = 12;
+
+let nextInstanceId = 0;
+let activeInstanceId = 0;
+let activeCleanup: (() => void) | null = null;
+
+function keepMounted(el: HTMLElement): () => void {
   const observer = new MutationObserver(() => {
     if (typeof document === 'undefined') return;
     if (!document.body.contains(el)) {
@@ -9,18 +17,31 @@ function keepMounted(el: HTMLElement): void {
     }
   });
   observer.observe(document.body, { childList: true, subtree: false });
+  return () => observer.disconnect();
 }
 
-const DRAWER_ID = 'threadpin-drawer';
-const TAB_ID = 'threadpin-drawer-tab';
+function cleanupActiveDrawer(): void {
+  activeCleanup?.();
+  activeCleanup = null;
+}
+
+export interface DrawerAnchor {
+  left: number;
+  top: number;
+  height: number;
+}
 
 export interface DrawerOptions {
   onJump: (bookmark: Bookmark) => void;
   onDelete: (id: string) => void;
+  onMinimize?: () => void;
+  onClose?: () => void;
 }
 
 export interface DrawerAPI {
   refresh(bookmarks: Bookmark[]): void;
+  open(anchor?: DrawerAnchor): void;
+  close(): void;
   unmount(): void;
 }
 
@@ -35,14 +56,18 @@ function formatRelativeTime(timestamp: number): string {
 }
 
 export function mountDrawer(options: DrawerOptions): DrawerAPI {
-  document.getElementById(DRAWER_ID)?.remove();
-  document.getElementById(TAB_ID)?.remove();
+  cleanupActiveDrawer();
+  document.querySelectorAll(`#${DRAWER_ID}`).forEach(el => el.remove());
+  document.querySelectorAll(`#${LEGACY_TAB_ID}`).forEach(el => el.remove());
 
-  let isOpen = false;
+  const instanceId = ++nextInstanceId;
+  activeInstanceId = instanceId;
+
+  let disposed = false;
   let currentBookmarks: Bookmark[] = [];
   let filterValue = '';
+  let lastAnchor: DrawerAnchor | null = null;
 
-  // Drawer panel
   const drawer = document.createElement('div');
   drawer.id = DRAWER_ID;
   drawer.className = 'threadpin-drawer threadpin-drawer--closed';
@@ -58,8 +83,26 @@ export function mountDrawer(options: DrawerOptions): DrawerAPI {
   count.className = 'threadpin-drawer__count';
   count.textContent = '0 saved';
 
-  header.appendChild(title);
-  header.appendChild(count);
+  const headerMain = document.createElement('div');
+  headerMain.className = 'threadpin-drawer__header-main';
+  headerMain.appendChild(title);
+  headerMain.appendChild(count);
+
+  const minimizeBtn = document.createElement('button');
+  minimizeBtn.type = 'button';
+  minimizeBtn.className = 'threadpin-drawer__minimize';
+  minimizeBtn.textContent = '-';
+  minimizeBtn.setAttribute('aria-label', 'Minimize bookmarks drawer');
+
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'threadpin-drawer__close';
+  closeBtn.textContent = '×';
+  closeBtn.setAttribute('aria-label', 'Close bookmarks drawer');
+
+  header.appendChild(headerMain);
+  header.appendChild(minimizeBtn);
+  header.appendChild(closeBtn);
 
   const filter = document.createElement('input');
   filter.className = 'threadpin-drawer__filter';
@@ -74,23 +117,42 @@ export function mountDrawer(options: DrawerOptions): DrawerAPI {
   drawer.appendChild(filter);
   drawer.appendChild(list);
   document.body.appendChild(drawer);
-  keepMounted(drawer);
+  const stopKeepingMounted = keepMounted(drawer);
 
-  // Drawer tab button (opens/closes the panel)
-  const tab = document.createElement('button');
-  tab.id = TAB_ID;
-  tab.className = 'threadpin-drawer-tab';
-  tab.setAttribute('aria-label', 'Toggle bookmark drawer');
-  tab.textContent = '📌';
-  document.body.appendChild(tab);
-  keepMounted(tab);
+  function isCurrent(): boolean {
+    return !disposed && activeInstanceId === instanceId;
+  }
 
-  tab.addEventListener('click', () => {
-    isOpen = !isOpen;
-    drawer.classList.toggle('threadpin-drawer--closed', !isOpen);
-  });
+  function positionBeside(anchor: DrawerAnchor): void {
+    if (!isCurrent()) return;
+    const rect = drawer.getBoundingClientRect();
+    const width = rect.width || 320;
+    const height = rect.height || 320;
+    let left = anchor.left - ANCHOR_GAP_PX - width;
+    let top = anchor.top + anchor.height / 2 - height / 2;
+    left = Math.max(0, Math.round(left));
+    const maxTop = Math.max(0, window.innerHeight - Math.min(height, window.innerHeight));
+    top = Math.max(0, Math.min(Math.round(top), maxTop));
+    drawer.style.left = `${left}px`;
+    drawer.style.top = `${top}px`;
+    drawer.style.right = 'auto';
+    drawer.style.transform = 'none';
+  }
+
+  function openDrawer(anchor?: DrawerAnchor): void {
+    if (!isCurrent()) return;
+    if (anchor) lastAnchor = anchor;
+    drawer.classList.remove('threadpin-drawer--closed');
+    if (lastAnchor) positionBeside(lastAnchor);
+  }
+
+  function closeDrawer(): void {
+    if (!isCurrent()) return;
+    drawer.classList.add('threadpin-drawer--closed');
+  }
 
   function renderList(bookmarks: Bookmark[]) {
+    if (!isCurrent()) return;
     currentBookmarks = bookmarks;
     count.textContent = `${bookmarks.length} saved`;
     list.innerHTML = '';
@@ -98,8 +160,7 @@ export function mountDrawer(options: DrawerOptions): DrawerAPI {
     if (bookmarks.length === 0) {
       const empty = document.createElement('p');
       empty.className = 'threadpin-drawer__empty';
-      empty.textContent =
-        'No bookmarks yet. Click "Bookmark here" to save your place.';
+      empty.textContent = 'No bookmarks yet. Click PIN to save your place.';
       list.appendChild(empty);
       return;
     }
@@ -147,9 +208,9 @@ export function mountDrawer(options: DrawerOptions): DrawerAPI {
       jumpBtn.textContent = '↩';
       jumpBtn.setAttribute('aria-label', `Jump to bookmark: ${bookmark.preview}`);
       jumpBtn.addEventListener('click', () => {
+        if (!isCurrent()) return;
         options.onJump(bookmark);
-        isOpen = false;
-        drawer.classList.add('threadpin-drawer--closed');
+        closeDrawer();
       });
 
       const deleteBtn = document.createElement('button');
@@ -157,6 +218,7 @@ export function mountDrawer(options: DrawerOptions): DrawerAPI {
       deleteBtn.textContent = '×';
       deleteBtn.setAttribute('aria-label', `Delete bookmark: ${bookmark.preview}`);
       deleteBtn.addEventListener('click', () => {
+        if (!isCurrent()) return;
         options.onDelete(bookmark.id);
       });
 
@@ -172,29 +234,50 @@ export function mountDrawer(options: DrawerOptions): DrawerAPI {
     });
   }
 
-  function updateTab(count: number) {
-    tab.textContent = count > 0 ? `📌 ${count}` : '📌';
+  function cleanup(): void {
+    if (disposed) return;
+    disposed = true;
+    stopKeepingMounted();
+    drawer.remove();
+    if (activeInstanceId === instanceId) {
+      activeInstanceId = 0;
+      activeCleanup = null;
+    }
   }
 
-  const api: DrawerAPI = {
-    refresh(bookmarks: Bookmark[]) {
-      renderList(bookmarks);
-      updateTab(bookmarks.length);
-    },
-    unmount() {
-      drawer.remove();
-      tab.remove();
-    },
-  };
-
-  // Initial state
   renderList([]);
-  updateTab(0);
 
   filter.addEventListener('input', () => {
+    if (!isCurrent()) return;
     filterValue = filter.value.trim();
     renderList(currentBookmarks);
   });
+
+  minimizeBtn.addEventListener('click', () => {
+    if (!isCurrent()) return;
+    closeDrawer();
+    options.onMinimize?.();
+  });
+
+  closeBtn.addEventListener('click', () => {
+    if (!isCurrent()) return;
+    closeDrawer();
+    options.onClose?.();
+  });
+
+  activeCleanup = cleanup;
+
+  const api: DrawerAPI = {
+    refresh(bookmarks: Bookmark[]) {
+      if (!isCurrent()) return;
+      renderList(bookmarks);
+    },
+    open: openDrawer,
+    close: closeDrawer,
+    unmount() {
+      cleanup();
+    },
+  };
 
   return api;
 }

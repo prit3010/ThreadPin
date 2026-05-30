@@ -25,9 +25,23 @@ describe('chatgptAdapter', () => {
     expect(chatgptAdapter.getConversationId(url)).toBe('chatgpt:abc-def-123');
   });
 
+  it('extracts conversation ID when called without adapter receiver', () => {
+    const { getConversationId } = chatgptAdapter;
+    expect(getConversationId(new URL('https://chatgpt.com/c/abc-123'))).toBe('chatgpt:abc-123');
+  });
+
   it('falls back to pathname when no /c/{id} segment present', () => {
     const url = new URL('https://chatgpt.com/');
     expect(chatgptAdapter.getConversationId(url)).toBe('chatgpt:/');
+  });
+
+  it('marks chatgpt root and new-chat paths as unstable', () => {
+    expect(chatgptAdapter.getStableConversationId?.(new URL('https://chatgpt.com/'))).toBeNull();
+    expect(chatgptAdapter.getStableConversationId?.(new URL('https://chatgpt.com/?model=gpt-5'))).toBeNull();
+  });
+
+  it('returns stable chatgpt conversation id for /c/id urls', () => {
+    expect(chatgptAdapter.getStableConversationId?.(new URL('https://chatgpt.com/c/abc-123'))).toBe('chatgpt:abc-123');
   });
 
   it('returns [data-message-id] as message container selector', () => {

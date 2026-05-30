@@ -67,117 +67,13 @@ html.dark {
   transform: translateX(-50%) translateY(0);
 }
 
-/* ── Bookmark Button ────────────────────────────────────── */
-.threadpin-bookmark-btn {
-  position: fixed;
-  right: 16px;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: var(--tp-z);
-  background: var(--tp-bg);
-  color: var(--tp-text);
-  border: 1px solid var(--tp-border);
-  border-radius: var(--tp-radius);
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  font-size: 18px;
-  font-family: system-ui, -apple-system, sans-serif;
-  cursor: grab;
-  box-shadow: var(--tp-shadow);
-  touch-action: none;
-  user-select: none;
-  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
-}
-
-.threadpin-bookmark-btn:hover {
-  background: var(--tp-bg-subtle);
-}
-
-.threadpin-bookmark-btn--dragging {
-  cursor: grabbing;
-  border-color: var(--tp-accent);
-  transform: translateY(-50%) scale(1.04);
-}
-
-/* ── Return Button ──────────────────────────────────────── */
-.threadpin-return-btn {
-  position: fixed;
-  right: 16px;
-  top: calc(50% + 52px);
-  z-index: var(--tp-z);
-  background: var(--tp-accent);
-  color: #fff;
-  border: none;
-  border-radius: var(--tp-radius);
-  font-family: system-ui, -apple-system, sans-serif;
-  cursor: pointer;
-  box-shadow: var(--tp-shadow);
-  display: flex;
-  align-items: stretch;
-  transition: opacity 0.2s ease, transform 0.2s ease;
-}
-
-.threadpin-return-btn--hidden {
-  opacity: 0;
-  pointer-events: none;
-  transform: translateX(8px);
-}
-
-.threadpin-return-btn__label {
-  padding: 8px 10px;
-  font-size: 13px;
-  white-space: nowrap;
-  cursor: pointer;
-  user-select: none;
-}
-
-.threadpin-return-btn__dismiss {
-  background: rgba(0, 0, 0, 0.15);
-  border: none;
-  border-left: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 0 var(--tp-radius) var(--tp-radius) 0;
-  color: #fff;
-  padding: 8px 9px;
-  font-size: 15px;
-  cursor: pointer;
-  line-height: 1;
-}
-
-.threadpin-return-btn__dismiss:hover {
-  background: rgba(0, 0, 0, 0.28);
-}
-
-/* ── Drawer Tab ─────────────────────────────────────────── */
-.threadpin-drawer-tab {
-  position: fixed;
-  right: 16px;
-  top: calc(50% - 44px);
-  z-index: var(--tp-z);
-  background: var(--tp-bg);
-  color: var(--tp-text);
-  border: 1px solid var(--tp-border);
-  border-radius: var(--tp-radius);
-  padding: 8px 12px;
-  font-size: 13px;
-  font-family: system-ui, -apple-system, sans-serif;
-  cursor: pointer;
-  box-shadow: var(--tp-shadow);
-  white-space: nowrap;
-  transition: background 0.15s ease;
-}
-
-.threadpin-drawer-tab:hover {
-  background: var(--tp-bg-subtle);
-}
-
 /* ── Drawer Panel ───────────────────────────────────────── */
 .threadpin-drawer {
   position: fixed;
-  right: 16px;
+  right: 88px;
   top: 50%;
   transform: translateY(-50%);
-  width: min(390px, calc(100vw - 32px));
+  width: min(390px, calc(100vw - 120px));
   max-height: min(70vh, 520px);
   overflow-y: auto;
   z-index: var(--tp-z);
@@ -193,12 +89,31 @@ html.dark {
 }
 
 .threadpin-drawer__header {
-  padding: 12px 14px;
-  display: flex;
+  padding: 10px 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
   border-bottom: 1px solid var(--tp-border);
+}
+
+.threadpin-drawer__header-main {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.threadpin-drawer__minimize,
+.threadpin-drawer__close {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--tp-border);
+  background: var(--tp-bg-subtle);
+  color: var(--tp-text);
+  cursor: pointer;
 }
 
 .threadpin-drawer__title {
@@ -336,4 +251,140 @@ html.dark {
 .threadpin-drawer__delete:hover {
   color: #ef4444;
   border-color: #ef4444;
+}
+
+.threadpin-dock {
+  position: fixed;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: var(--tp-z);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--tp-border);
+  border-radius: 10px;
+  background: var(--tp-bg);
+  box-shadow: var(--tp-shadow);
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+.threadpin-dock button,
+.threadpin-restore-tab {
+  font-family: system-ui, -apple-system, sans-serif;
+  cursor: pointer;
+  user-select: none;
+}
+
+.threadpin-dock__save,
+.threadpin-dock__list,
+.threadpin-dock__hide {
+  border-radius: 8px;
+  border: 1px solid var(--tp-border);
+  height: 38px;
+  min-width: 54px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.threadpin-dock__save {
+  background: var(--tp-accent);
+  border-color: var(--tp-accent);
+  color: #111827;
+}
+
+.threadpin-dock__list {
+  background: var(--tp-bg-subtle);
+  color: var(--tp-text);
+}
+
+.threadpin-dock__hide {
+  min-width: 38px;
+  background: transparent;
+  color: var(--tp-text-muted);
+}
+
+.threadpin-dock__grip {
+  height: 10px;
+  margin: -2px auto 2px;
+  width: 28px;
+  border-radius: 3px;
+  background:
+    linear-gradient(var(--tp-text-muted), var(--tp-text-muted)) center/20px 2px no-repeat;
+  opacity: 0.5;
+  cursor: grab;
+}
+
+.threadpin-dock__grip:hover {
+  opacity: 0.9;
+}
+
+.threadpin-dock--dragging,
+.threadpin-dock--dragging .threadpin-dock__grip {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.threadpin-dock__pin-wrap {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+.threadpin-dock__return {
+  position: absolute;
+  right: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--tp-accent);
+  background: var(--tp-accent);
+  color: #111827;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: var(--tp-shadow);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.threadpin-dock__return:hover {
+  opacity: 0.9;
+}
+
+.threadpin-capture-line {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 50%;
+  z-index: var(--tp-z);
+  border-top: 2px dashed var(--tp-accent);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.threadpin-capture-line--visible {
+  opacity: 0.8;
+}
+
+.threadpin-restore-tab {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: var(--tp-z);
+  width: 18px;
+  height: 56px;
+  border: 1px solid var(--tp-border);
+  border-right: none;
+  border-radius: 8px 0 0 8px;
+  background: var(--tp-bg);
+  color: var(--tp-text);
+  box-shadow: var(--tp-shadow);
 }
