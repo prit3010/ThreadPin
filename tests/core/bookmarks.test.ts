@@ -114,6 +114,33 @@ describe('captureAnchor', () => {
     expect(anchor.preview).toContain('visible code block');
   });
 
+  it('does not borrow dataStart from a different text block than the captured preview', () => {
+    document.body.innerHTML = `
+      <div data-message-id="msg-transient" data-message-author-role="assistant">
+        <p data-start="10">Parser docs that were rendered earlier.</p>
+        <p>Now let me update the setup guide.</p>
+      </div>
+    `;
+
+    const message = document.querySelector('[data-message-id="msg-transient"]')!;
+    const anchored = document.querySelector('[data-start="10"]')!;
+    const transient = [...document.querySelectorAll('p')].find(
+      (p) => p.textContent === 'Now let me update the setup guide.'
+    )!;
+
+    Element.prototype.getBoundingClientRect = vi.fn(function (this: Element) {
+      if (this === message) return rect(100, 500);
+      if (this === anchored) return rect(150, 190);
+      if (this === transient) return rect(205, 245);
+      return rect(0, 0, 0);
+    });
+
+    const anchor = captureAnchor(chatgptAdapter, 220);
+
+    expect(anchor.preview).toBe('Now let me update the setup guide.');
+    expect(anchor.dataStart).toBeNull();
+  });
+
   it('captures selectedText when user has text highlighted', () => {
     window.getSelection = vi.fn().mockReturnValue({
       toString: () => 'highlighted text',

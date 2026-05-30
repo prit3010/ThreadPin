@@ -69,19 +69,25 @@ export function captureAnchor(
   const visibleParagraphs = paragraphs.filter(isVisibleInViewport);
   const nearestP = closestToViewportY(visibleParagraphs, viewportY);
 
-  // null means no [data-start] paragraph was found (e.g. cursor is inside a
-  // code block). jumpToBookmark will use scrollY for in-message positioning.
-  const dataStartAttr = nearestP?.getAttribute('data-start');
-  const parsedDataStart = dataStartAttr !== null && dataStartAttr !== undefined
-    ? parseInt(dataStartAttr, 10)
-    : NaN;
-  const dataStart = Number.isFinite(parsedDataStart) ? parsedDataStart : null;
-
   const nearestTextBlock = closestToViewportY(
     Array.from(nearestContainer.querySelectorAll(textBlockSelector))
       .filter(isVisibleInViewport),
     viewportY
   );
+
+  // null means no [data-start] paragraph was found (e.g. cursor is inside a
+  // code block or transiently unanchored text). jumpToBookmark will use text
+  // matching or scrollY for in-message positioning.
+  const anchorElement = getAnchorElementForTextBlock(
+    nearestTextBlock,
+    nearestContainer,
+    adapter.getParagraphSelector()
+  ) ?? (nearestTextBlock ? null : nearestP);
+  const dataStartAttr = anchorElement?.getAttribute('data-start');
+  const parsedDataStart = dataStartAttr !== null && dataStartAttr !== undefined
+    ? parseInt(dataStartAttr, 10)
+    : NaN;
+  const dataStart = Number.isFinite(parsedDataStart) ? parsedDataStart : null;
 
   // Preview: prefer selection → nearest text block → nearest paragraph → container text (code block fallback)
   const rawPreview =
@@ -99,6 +105,16 @@ export function captureAnchor(
     selectedText: selectedText ? selectedText.slice(0, 500) : null,
     preview,
   };
+}
+
+function getAnchorElementForTextBlock(
+  textBlock: Element | null,
+  container: Element,
+  paragraphSelector: string
+): Element | null {
+  if (!textBlock) return null;
+  const anchor = textBlock.closest(paragraphSelector);
+  return anchor && container.contains(anchor) ? anchor : null;
 }
 
 function isVisibleInViewport(el: Element): boolean {

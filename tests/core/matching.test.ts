@@ -83,6 +83,32 @@ describe('jumpToBookmark', () => {
     expect(window.scrollTo).not.toHaveBeenCalled();
   });
 
+  it('uses preview text inside the saved message when there is no paragraph anchor or selection', async () => {
+    document.body.innerHTML = `
+      <div data-message-id="msg-1">
+        <p data-start="10">Parser docs that were rendered earlier.</p>
+        <p>Now let me update the setup guide.</p>
+      </div>
+    `;
+    const previewParagraph = [...document.querySelectorAll('p')].find(
+      (p) => p.textContent === 'Now let me update the setup guide.'
+    )!;
+    const previewScroll = vi.spyOn(previewParagraph, 'scrollIntoView');
+
+    const result = await jumpToBookmark(
+      makeBookmark({
+        dataStart: null,
+        selectedText: null,
+        preview: 'Now let me update the setup guide.',
+      }),
+      chatgptAdapter
+    );
+
+    expect(result).toBe(true);
+    expect(previewScroll).toHaveBeenCalled();
+    expect(window.scrollTo).not.toHaveBeenCalled();
+  });
+
   it('finds message ids containing CSS selector metacharacters', async () => {
     document.body.innerHTML = `
       <div data-message-id='msg-"quoted"'>

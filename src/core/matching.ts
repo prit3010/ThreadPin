@@ -29,9 +29,10 @@ export async function jumpToBookmark(
       return true;
     }
 
-    if (bookmark.selectedText) {
+    const inMessageAnchorText = bookmark.selectedText ?? bookmark.preview;
+    if (inMessageAnchorText) {
       const foundInMessage = findTextInRoot(
-        bookmark.selectedText,
+        inMessageAnchorText,
         messageEl,
         adapter.getTextBlockSelector?.() ?? 'p, pre, li, code',
         adapter.getMessageContainerSelector()
