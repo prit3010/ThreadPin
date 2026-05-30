@@ -23,15 +23,20 @@ import { mountDrawer } from '../src/components/drawer';
 import { showToast } from '../src/components/toast';
 import type { Bookmark } from '../src/core/types';
 
-// ── Wait for ChatGPT's React app to finish hydrating ─────────────────────
-function waitForChatGPT(): Promise<void> {
+// ── Wait for the chat app's React UI to finish hydrating ─────────────────
+// ChatGPT renders a <main>; claude.ai renders a [data-autoscroll-container].
+function isAppReady(): boolean {
+  return !!document.querySelector('main, [data-autoscroll-container]');
+}
+
+function waitForAppReady(): Promise<void> {
   return new Promise((resolve) => {
-    if (document.querySelector('main')) {
+    if (isAppReady()) {
       resolve();
       return;
     }
     const observer = new MutationObserver(() => {
-      if (document.querySelector('main')) {
+      if (isAppReady()) {
         observer.disconnect();
         resolve();
       }
@@ -41,11 +46,11 @@ function waitForChatGPT(): Promise<void> {
 }
 
 export default defineContentScript({
-  matches: ['https://chatgpt.com/*', 'https://chat.openai.com/*'],
+  matches: ['https://chatgpt.com/*', 'https://chat.openai.com/*', 'https://claude.ai/*'],
   async main() {
     console.log('[ThreadPin] loaded');
 
-    await waitForChatGPT();
+    await waitForAppReady();
 
     let currentConversationId: string | null = null;
     let currentBookmarkCount = 0;
