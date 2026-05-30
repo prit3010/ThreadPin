@@ -229,4 +229,39 @@ describe('captureAnchor on claude.ai', () => {
     const anchor = captureAnchor(claudeAdapter, 400);
     expect(anchor.preview).toBe('rows: 12');
   });
+
+  it('pins the tall assistant message the capture line sits inside, not a smaller closer-centered neighbor', () => {
+    // Reproduces the observed bug: the capture line is visually inside a tall
+    // assistant answer, but a small user message just below it has a nearer
+    // *center*, so the old clamped-center metric wrongly selected the user msg.
+    document.body.innerHTML = `
+      <div data-autoscroll-container="true">
+        <div class="standard-markdown">
+          <p class="font-claude-response-body">The assistant answer the user is reading.</p>
+        </div>
+        <div data-testid="user-message">
+          <p class="whitespace-pre-wrap">a short follow-up question</p>
+        </div>
+      </div>
+    `;
+    const assistant = document.querySelector('.standard-markdown')!;
+    const assistantP = assistant.querySelector('p')!;
+    const user = document.querySelector('[data-testid="user-message"]')!;
+    const userP = user.querySelector('p')!;
+
+    // Capture line at 200 (innerHeight 800). The assistant container spans
+    // 100..900 so the line is INSIDE it, but its clamped visible center is 450
+    // (far). The small user message at 240..300 has center 270 — nearer the
+    // line under the old metric, so it used to win incorrectly.
+    Element.prototype.getBoundingClientRect = vi.fn(function (this: Element) {
+      if (this === assistant) return rect(100, 900);
+      if (this === assistantP) return rect(140, 200);
+      if (this === user) return rect(240, 300);
+      if (this === userP) return rect(250, 290);
+      return rect(0, 0, 0);
+    });
+
+    const anchor = captureAnchor(claudeAdapter, 200);
+    expect(anchor.preview).toBe('The assistant answer the user is reading.');
+  });
 });

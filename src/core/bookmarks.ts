@@ -26,22 +26,22 @@ export function captureAnchor(
 
   const pool = visibleContainers.length > 0 ? visibleContainers : containers;
 
-  // Clamp each container's top/bottom to the viewport before computing the
-  // center. This prevents large containers (e.g. a tall code block that
-  // spans the whole viewport) from losing to an off-screen sibling because
-  // their geometric center is far off-screen.
-  function visibleDistanceFromCenter(el: Element): number {
+  // Rank by the capture line's distance to each container's edges: 0 when the
+  // line falls inside [top, bottom] (the message the line is actually on),
+  // otherwise the gap to the nearest edge. Using edge distance instead of the
+  // center avoids a bias against tall messages — a long answer the line sits
+  // inside would otherwise lose to a small neighbour whose center is closer.
+  function distanceFromCaptureLine(el: Element): number {
     const rect = el.getBoundingClientRect();
-    const clampedTop = Math.max(0, rect.top);
-    const clampedBottom = Math.min(window.innerHeight, rect.bottom);
-    const visibleCenter = (clampedTop + clampedBottom) / 2;
-    return Math.abs(visibleCenter - viewportY);
+    if (viewportY < rect.top) return rect.top - viewportY;
+    if (viewportY > rect.bottom) return viewportY - rect.bottom;
+    return 0;
   }
 
   const nearestContainer = pool.reduce<Element | null>(
     (nearest, el) => {
       if (!nearest) return el;
-      return visibleDistanceFromCenter(el) < visibleDistanceFromCenter(nearest)
+      return distanceFromCaptureLine(el) < distanceFromCaptureLine(nearest)
         ? el
         : nearest;
     },
