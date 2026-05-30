@@ -25,7 +25,7 @@ export interface Adapter {
   getStableConversationId?(url: URL): string | null;
   getMessageContainerSelector(): string;
   getParagraphSelector(): string;
-  // Granularity for text-based anchoring/preview. Defaults to 'p, pre, li'.
+  // Granularity for text-based anchoring/preview. Defaults to 'p, pre, li, code'.
   getTextBlockSelector?(): string;
   // Element that actually scrolls, when it is not the window. Defaults to null.
   getScrollContainer?(): Element | null;

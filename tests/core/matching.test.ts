@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { jumpToBookmark } from '../../src/core/matching';
 import { chatgptAdapter } from '../../src/adapters/chatgpt';
+import { claudeAdapter } from '../../src/adapters/claude';
 import type { Bookmark } from '../../src/core/types';
 
 function makeBookmark(overrides: Partial<Bookmark> = {}): Bookmark {
@@ -130,5 +131,117 @@ describe('jumpToBookmark', () => {
     );
     expect(result).toBe(false);
     expect(window.scrollTo).toHaveBeenCalledWith({ top: 500, behavior: 'smooth' });
+  });
+
+  it('jumps to preview text for a chatgpt bookmark when selectedText is null and the message id is stale', async () => {
+    document.body.innerHTML = `
+      <div data-message-id="some-other-msg">
+        <p data-start="0">a paragraph that contains the unique-preview-marker text</p>
+      </div>
+    `;
+    const result = await jumpToBookmark(
+      makeBookmark({
+        messageId: 'nonexistent',
+        selectedText: null,
+        preview: 'unique-preview-marker',
+      }),
+      chatgptAdapter
+    );
+    expect(result).toBe(true);
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+    expect(window.scrollTo).not.toHaveBeenCalled();
+  });
+
+  it('lets a chatgpt text search land on a bare code element (default selector includes code)', async () => {
+    document.body.innerHTML = `
+      <section>
+        <code>npm run unique-code-marker</code>
+      </section>
+    `;
+    const code = document.querySelector('code')!;
+    const codeScroll = vi.spyOn(code, 'scrollIntoView');
+
+    const result = await jumpToBookmark(
+      makeBookmark({
+        messageId: 'nonexistent',
+        selectedText: 'unique-code-marker',
+      }),
+      chatgptAdapter
+    );
+
+    expect(result).toBe(true);
+    expect(codeScroll).toHaveBeenCalled();
+    expect(window.scrollTo).not.toHaveBeenCalled();
+  });
+});
+
+function makeClaudeBookmark(overrides: Partial<Bookmark> = {}): Bookmark {
+  return {
+    id: 'c-id',
+    conversationId: 'claude:abc',
+    hostname: 'claude.ai',
+    messageId: '',
+    dataStart: null,
+    scrollY: 742,
+    selectedText: null,
+    preview: 'Assistant prose paragraph reply.',
+    createdAt: Date.now(),
+    ...overrides,
+  };
+}
+
+describe('jumpToBookmark on claude.ai', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  it('finds the bookmark by preview text when there is no selection or message id', async () => {
+    document.body.innerHTML = `
+      <div data-autoscroll-container="true">
+        <div class="standard-markdown">
+          <p class="font-claude-response-body">Assistant prose paragraph reply.</p>
+        </div>
+      </div>
+    `;
+    const result = await jumpToBookmark(makeClaudeBookmark(), claudeAdapter);
+    expect(result).toBe(true);
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+  });
+
+  it('finds a specific code line by its preview text', async () => {
+    document.body.innerHTML = `
+      <div data-autoscroll-container="true">
+        <div class="standard-markdown">
+          <pre class="code-block__code"><code class="language-yaml"><span>rows: 12</span><span>source: invoice.pdf</span></code></pre>
+        </div>
+      </div>
+    `;
+    const result = await jumpToBookmark(
+      makeClaudeBookmark({ preview: 'source: invoice.pdf' }),
+      claudeAdapter
+    );
+    expect(result).toBe(true);
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+  });
+
+  it('falls back to scrolling the autoscroll container when text is not found', async () => {
+    document.body.innerHTML = `
+      <div data-autoscroll-container="true">
+        <div class="standard-markdown"><p>totally different content</p></div>
+      </div>
+    `;
+    const scroller = document.querySelector('[data-autoscroll-container]') as HTMLElement;
+    scroller.scrollTo = vi.fn();
+    window.scrollTo = vi.fn();
+
+    const result = await jumpToBookmark(
+      makeClaudeBookmark({ preview: 'nowhere-to-be-found-xyz' }),
+      claudeAdapter
+    );
+
+    expect(result).toBe(false);
+    expect(scroller.scrollTo).toHaveBeenCalledWith({ top: 742, behavior: 'smooth' });
+    expect(window.scrollTo).not.toHaveBeenCalled();
   });
 });
