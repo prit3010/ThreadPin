@@ -44,9 +44,9 @@ describe('claudeAdapter', () => {
     expect(claudeAdapter.getParagraphSelector()).toBe('p, li, h1, h2, h3, pre');
   });
 
-  it('returns a code-line-precise text block selector', () => {
+  it('returns a code-line-precise text block selector that includes table cells', () => {
     expect(claudeAdapter.getTextBlockSelector?.()).toBe(
-      'p, li, h1, h2, h3, pre code > span'
+      'p, li, h1, h2, h3, td, th, pre code > span'
     );
   });
 

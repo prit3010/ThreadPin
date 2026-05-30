@@ -29,7 +29,7 @@ export const claudeAdapter: Adapter = {
   },
 
   getTextBlockSelector(): string {
-    return 'p, li, h1, h2, h3, pre code > span';
+    return 'p, li, h1, h2, h3, td, th, pre code > span';
   },
 
   getScrollContainer(): Element | null {

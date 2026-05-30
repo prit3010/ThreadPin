@@ -264,4 +264,35 @@ describe('captureAnchor on claude.ai', () => {
     const anchor = captureAnchor(claudeAdapter, 200);
     expect(anchor.preview).toBe('The assistant answer the user is reading.');
   });
+
+  it('captures the table cell at the capture line, not the heading above the table', () => {
+    // Reproduces the observed bug: pinning a table row logged the <h3> heading
+    // above the table because table cells were not in the text-block selector.
+    document.body.innerHTML = `
+      <div data-autoscroll-container="true">
+        <div class="standard-markdown">
+          <h3>Here's the breakdown:</h3>
+          <table><tbody>
+            <tr>
+              <td>Part 2 — Skills</td><td>196 lines</td><td>Create 3 parser skills</td>
+            </tr>
+          </tbody></table>
+        </div>
+      </div>
+    `;
+    const assistant = document.querySelector('.standard-markdown')!;
+    const heading = assistant.querySelector('h3')!;
+    const cells = assistant.querySelectorAll('td');
+
+    // Capture line at 200 sits on the table row; the heading is above it.
+    Element.prototype.getBoundingClientRect = vi.fn(function (this: Element) {
+      if (this === assistant) return rect(-100, 500);
+      if (this === heading) return rect(-50, 0);
+      if (this === cells[0] || this === cells[1] || this === cells[2]) return rect(180, 240);
+      return rect(0, 0, 0);
+    });
+
+    const anchor = captureAnchor(claudeAdapter, 200);
+    expect(anchor.preview).toBe('Part 2 — Skills');
+  });
 });

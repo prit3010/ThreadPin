@@ -225,6 +225,32 @@ describe('jumpToBookmark on claude.ai', () => {
     expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
   });
 
+  it('finds a table cell by its preview text', async () => {
+    document.body.innerHTML = `
+      <div data-autoscroll-container="true">
+        <div class="standard-markdown">
+          <h3>Here's the breakdown:</h3>
+          <table><tbody>
+            <tr><td>Part 2 — Skills</td><td>196 lines</td><td>Create 3 parser skills</td></tr>
+          </tbody></table>
+        </div>
+      </div>
+    `;
+    const cell = [...document.querySelectorAll('td')].find(
+      (td) => td.textContent === 'Part 2 — Skills'
+    )!;
+    const cellScroll = vi.spyOn(cell, 'scrollIntoView');
+
+    const result = await jumpToBookmark(
+      makeClaudeBookmark({ preview: 'Part 2 — Skills' }),
+      claudeAdapter
+    );
+    expect(result).toBe(true);
+    // Must land on the cell itself, not fall back to scrolling the whole
+    // .standard-markdown container (which lands above the table).
+    expect(cellScroll).toHaveBeenCalled();
+  });
+
   it('falls back to scrolling the autoscroll container when text is not found', async () => {
     document.body.innerHTML = `
       <div data-autoscroll-container="true">
