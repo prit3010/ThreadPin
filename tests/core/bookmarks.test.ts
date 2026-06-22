@@ -57,6 +57,55 @@ describe('captureAnchor', () => {
     expect(anchor.dataStart).toBe(0);
   });
 
+  it('captures the reading line offset inside a tall message', () => {
+    const message = document.querySelector('[data-message-id="msg-1"]')!;
+    const firstParagraph = message.querySelector('[data-start="0"]')!;
+    const secondMessage = document.querySelector('[data-message-id="msg-2"]')!;
+
+    Element.prototype.getBoundingClientRect = vi.fn(function (this: Element) {
+      if (this === message) return rect(-1000, 1600);
+      if (this === firstParagraph) return rect(350, 420);
+      if (this === secondMessage) return rect(1700, 1900);
+      return rect(0, 0, 0);
+    });
+
+    const anchor = captureAnchor(chatgptAdapter, 400);
+
+    expect(anchor.messageId).toBe('msg-1');
+    expect(anchor.messageOffsetY).toBe(1400);
+    expect(anchor.viewportFraction).toBe(0.5);
+  });
+
+  it('captures the nearest scroll container position for long virtualized pages', () => {
+    document.body.innerHTML = `
+      <div id="scroll-root" style="overflow-y: auto;">
+        <div data-message-id="msg-1" data-message-author-role="assistant">
+          <p data-start="0">Middle of a very long answer.</p>
+        </div>
+      </div>
+    `;
+
+    const scrollRoot = document.getElementById('scroll-root')!;
+    Object.defineProperties(scrollRoot, {
+      clientHeight: { value: 800, configurable: true },
+      scrollHeight: { value: 4000, configurable: true },
+    });
+    scrollRoot.scrollTop = 1234;
+
+    const message = document.querySelector('[data-message-id="msg-1"]')!;
+    const paragraph = document.querySelector('[data-start="0"]')!;
+    Element.prototype.getBoundingClientRect = vi.fn(function (this: Element) {
+      if (this === scrollRoot) return rect(0, 800);
+      if (this === message) return rect(100, 1200);
+      if (this === paragraph) return rect(350, 420);
+      return rect(0, 0, 0);
+    });
+
+    const anchor = captureAnchor(chatgptAdapter, 400);
+
+    expect(anchor.scrollContainerTop).toBe(1234);
+  });
+
   it('captures the message closest to an explicit viewport Y coordinate', () => {
     const firstMessage = document.querySelector('[data-message-id="msg-1"]')!;
     const firstParagraph = firstMessage.querySelector('[data-start="0"]')!;
@@ -157,6 +206,31 @@ describe('captureAnchor', () => {
   it('generates preview from nearest paragraph text', () => {
     const anchor = captureAnchor(chatgptAdapter);
     expect(anchor.preview).toBe('First paragraph content here.');
+  });
+
+  it('expands inline data-start anchors to the surrounding readable block for preview', () => {
+    document.body.innerHTML = `
+      <div data-message-id="msg-inline" data-message-author-role="assistant">
+        <p>SkillOpt optimizes <strong data-start="20">skills</strong>.</p>
+        <p>Agent Gauntlet optimizes <strong data-start="80">the whole harness</strong>.</p>
+      </div>
+    `;
+
+    const message = document.querySelector('[data-message-id="msg-inline"]')!;
+    const inlineSkill = document.querySelector('[data-start="20"]')!;
+    const inlineHarness = document.querySelector('[data-start="80"]')!;
+
+    Element.prototype.getBoundingClientRect = vi.fn(function (this: Element) {
+      if (this === message) return rect(100, 260);
+      if (this === inlineSkill) return rect(110, 140);
+      if (this === inlineHarness) return rect(190, 220);
+      return rect(0, 0, 0);
+    });
+
+    const anchor = captureAnchor(chatgptAdapter, 125);
+
+    expect(anchor.dataStart).toBe(20);
+    expect(anchor.preview).toBe('SkillOpt optimizes skills.');
   });
 
   it('truncates preview to 120 characters', () => {

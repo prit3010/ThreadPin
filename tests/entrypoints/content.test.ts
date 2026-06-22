@@ -24,6 +24,13 @@ describe('content script wiring', () => {
     expect(contentSource).not.toContain('mountBookmarkButton');
   });
 
+  it('logs the loaded extension version and timestamp for reload verification', () => {
+    expect(contentSource).toContain("import packageJson from '../package.json'");
+    expectSourceToMatch(
+      /const loadedAt = new Date\(\)\.toISOString\(\);.*console\.log\(`\[ThreadPin\] loaded version=\$\{packageJson\.version\} loadedAt=\$\{loadedAt\}`\);/
+    );
+  });
+
   it('captures at the draggable PIN line using the stored handle fraction', () => {
     expect(contentSource).toContain('getBookmarkHandlePosition');
     expect(contentSource).toContain('saveBookmarkHandlePosition');
@@ -50,5 +57,12 @@ describe('content script wiring', () => {
     expectSourceToMatch(
       /onJump:\s*async\s*\(bookmark\)\s*=>\s*{.*?await jumpAndToast\(bookmark\);.*?uiState\s*=\s*\{\s*\.\.\.uiState,\s*drawerMode:\s*'closed'\s*};.*?await saveThreadPinUiState\(\{\s*drawerMode:\s*'closed'\s*}\);/
     );
+  });
+
+  it('persists the active bookmark id so reload keeps the selected return target', () => {
+    expect(contentSource).toContain('getActiveBookmarkId');
+    expect(contentSource).toContain('saveActiveBookmarkId');
+    expectSourceToMatch(/await saveActiveBookmarkId\(bookmark\.conversationId, bookmark\.id\);/);
+    expectSourceToMatch(/const activeBookmarkId = await getActiveBookmarkId\(conversationId\);/);
   });
 });

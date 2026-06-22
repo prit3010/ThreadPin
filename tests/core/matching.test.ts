@@ -66,6 +66,320 @@ describe('jumpToBookmark', () => {
     expect(window.scrollTo).not.toHaveBeenCalled();
   });
 
+  it('uses saved absolute target offset when exact data-start is missing from a mounted low-specificity message', async () => {
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 });
+    document.body.innerHTML = `
+      <div id="scroll-root" style="overflow-y: auto;">
+        <div data-message-id="msg-1">
+          <p data-start="10">Best final framing</p>
+          <p data-start="20">Product architecture</p>
+        </div>
+      </div>
+    `;
+
+    const scrollRoot = document.getElementById('scroll-root')!;
+    Object.defineProperties(scrollRoot, {
+      clientHeight: { configurable: true, value: 800 },
+      scrollHeight: { configurable: true, value: 12000 },
+    });
+    scrollRoot.scrollTop = 2500;
+
+    const result = await jumpToBookmark(
+      makeBookmark({
+        dataStart: 999,
+        selectedText: null,
+        preview: 'Expected behavior:',
+        scrollY: 0,
+        scrollContainerTop: 7600,
+        messageOffsetY: 1200,
+        viewportFraction: 0.5,
+      }),
+      chatgptAdapter
+    );
+
+    expect(result).toBe(true);
+    expect(scrollRoot.scrollTop).toBe(8400);
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+    expect(window.scrollTo).not.toHaveBeenCalled();
+  });
+
+  it('checks selected text after restoring saved internal scroll position', async () => {
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 });
+    document.body.innerHTML = `
+      <div id="scroll-root" style="overflow-y: auto;">
+        <div data-message-id="msg-1">
+          <p data-start="10">Best final framing</p>
+          <p data-start="20">Product architecture</p>
+        </div>
+      </div>
+    `;
+
+    const scrollRoot = document.getElementById('scroll-root')!;
+    Object.defineProperties(scrollRoot, {
+      clientHeight: { configurable: true, value: 800 },
+      scrollHeight: { configurable: true, value: 12000 },
+    });
+    scrollRoot.addEventListener('scroll', () => {
+      scrollRoot.innerHTML = `
+        <div data-message-id="msg-1">
+          <p data-start="1000">legacy target exact words</p>
+        </div>
+      `;
+    });
+
+    const result = await jumpToBookmark(
+      makeBookmark({
+        dataStart: 999,
+        selectedText: 'legacy target exact words',
+        scrollY: 0,
+        scrollContainerTop: 7600,
+        messageOffsetY: 1200,
+        viewportFraction: 0.5,
+      }),
+      chatgptAdapter
+    );
+
+    expect(result).toBe(true);
+    expect(scrollRoot.scrollTop).toBe(7600);
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+    expect(window.scrollTo).not.toHaveBeenCalled();
+  });
+
+  it('checks bookmark preview after restoring saved internal scroll position', async () => {
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 });
+    document.body.innerHTML = `
+      <div id="scroll-root" style="overflow-y: auto;">
+        <div data-message-id="msg-1">
+          <p data-start="10">Best final framing</p>
+          <p data-start="20">Product architecture</p>
+        </div>
+      </div>
+    `;
+
+    const scrollRoot = document.getElementById('scroll-root')!;
+    Object.defineProperties(scrollRoot, {
+      clientHeight: { configurable: true, value: 800 },
+      scrollHeight: { configurable: true, value: 12000 },
+    });
+    scrollRoot.addEventListener('scroll', () => {
+      scrollRoot.innerHTML = `
+        <div data-message-id="msg-1">
+          <p data-start="1000">Too risky for hackathon.</p>
+        </div>
+      `;
+    });
+
+    const result = await jumpToBookmark(
+      makeBookmark({
+        dataStart: 999,
+        selectedText: null,
+        preview: 'Too risky for hackathon.',
+        scrollY: 0,
+        scrollContainerTop: 7600,
+        messageOffsetY: 1200,
+        viewportFraction: 0.5,
+      }),
+      chatgptAdapter
+    );
+
+    expect(result).toBe(true);
+    expect(scrollRoot.scrollTop).toBe(7600);
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+    expect(window.scrollTo).not.toHaveBeenCalled();
+  });
+
+  it('scans nearby restored positions for a virtualized bookmark preview', async () => {
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 });
+    document.body.innerHTML = `
+      <div id="threadpin-drawer" class="threadpin-drawer threadpin-drawer--closed">
+        <p>Too risky for hackathon.</p>
+      </div>
+      <div id="scroll-root" style="overflow-y: auto;">
+        <div data-message-id="msg-1">
+          <p data-start="10">Best final framing</p>
+          <p data-start="20">Product architecture</p>
+        </div>
+      </div>
+    `;
+
+    const scrollRoot = document.getElementById('scroll-root')!;
+    Object.defineProperties(scrollRoot, {
+      clientHeight: { configurable: true, value: 800 },
+      scrollHeight: { configurable: true, value: 12000 },
+    });
+    scrollRoot.addEventListener('scroll', () => {
+      if (scrollRoot.scrollTop === 9000) {
+        scrollRoot.innerHTML = `
+          <div data-message-id="msg-1">
+            <p data-start="1000">Too risky for hackathon.</p>
+          </div>
+        `;
+      } else {
+        scrollRoot.innerHTML = `
+          <div data-message-id="msg-1">
+            <p data-start="10">Best final framing</p>
+            <p data-start="20">Product architecture</p>
+          </div>
+        `;
+      }
+    });
+
+    const result = await jumpToBookmark(
+      makeBookmark({
+        dataStart: 999,
+        selectedText: null,
+        preview: 'Too risky for hackathon.',
+        scrollY: 0,
+        scrollContainerTop: 7600,
+        messageOffsetY: 1200,
+        viewportFraction: 0.5,
+      }),
+      chatgptAdapter
+    );
+
+    expect(result).toBe(true);
+    expect(scrollRoot.scrollTop).toBe(9000);
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+    expect(window.scrollTo).not.toHaveBeenCalled();
+  });
+
+  it('scans a wider range for older virtualized bookmarks without message offsets', async () => {
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 });
+    document.body.innerHTML = `
+      <div id="scroll-root" style="overflow-y: auto;">
+        <div data-testid="conversation-turn-40">
+          <div>currently mounted lower turn</div>
+        </div>
+      </div>
+    `;
+
+    const scrollRoot = document.getElementById('scroll-root')!;
+    Object.defineProperties(scrollRoot, {
+      clientHeight: { configurable: true, value: 800 },
+      scrollHeight: { configurable: true, value: 40000 },
+    });
+    scrollRoot.addEventListener('scroll', () => {
+      if (scrollRoot.scrollTop === 16400) {
+        scrollRoot.innerHTML = `
+          <div data-testid="conversation-turn-12">
+            <div>i feel we need to do this as V1 to make it more flashy</div>
+          </div>
+        `;
+      } else {
+        scrollRoot.innerHTML = `
+          <div data-testid="conversation-turn-40">
+            <div>currently mounted lower turn</div>
+          </div>
+        `;
+      }
+    });
+
+    const chatTurn = () => document.querySelector('[data-testid="conversation-turn-12"]');
+
+    const result = await jumpToBookmark(
+      makeBookmark({
+        messageId: '',
+        dataStart: null,
+        selectedText: null,
+        preview: 'i feel we need to do this as V1 to make it more flashy',
+        scrollY: 0,
+        scrollContainerTop: 26000,
+        messageOffsetY: null,
+        viewportFraction: null,
+      }),
+      chatgptAdapter
+    );
+
+    expect(result).toBe(true);
+    expect(scrollRoot.scrollTop).toBe(16400);
+    expect(chatTurn()).not.toBeNull();
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+    expect(window.scrollTo).not.toHaveBeenCalled();
+  });
+
+  it('finds bookmark previews in ChatGPT user turns without matching hidden drawer text', async () => {
+    document.body.innerHTML = `
+      <div id="threadpin-drawer" class="threadpin-drawer threadpin-drawer--closed">
+        <p>i feel we need to do this as V1 to make it more flashy</p>
+      </div>
+      <div id="scroll-root" style="overflow-y: auto;">
+        <div data-testid="conversation-turn-8">
+          <div>i feel we need to do this as V1 to make it more flashy</div>
+        </div>
+      </div>
+    `;
+
+    const chatTurn = document.querySelector('[data-testid="conversation-turn-8"]')!;
+
+    const result = await jumpToBookmark(
+      makeBookmark({
+        messageId: '',
+        dataStart: null,
+        selectedText: null,
+        preview: 'i feel we need to do this as V1 to make it more flashy',
+      }),
+      chatgptAdapter
+    );
+
+    expect(result).toBe(true);
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith({
+      behavior: 'instant',
+      block: 'center',
+    });
+    expect((Element.prototype.scrollIntoView as ReturnType<typeof vi.fn>).mock.instances[0]).toBe(chatTurn);
+    expect(window.scrollTo).not.toHaveBeenCalled();
+  });
+
+  it('waits for a virtualized exact paragraph to remount after restoring saved internal scroll position', async () => {
+    vi.useFakeTimers();
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 });
+    document.body.innerHTML = `
+      <div id="scroll-root" style="overflow-y: auto;">
+        <div data-message-id="other-msg">
+          <p data-start="10">currently mounted far-away message</p>
+        </div>
+      </div>
+    `;
+
+    const scrollRoot = document.getElementById('scroll-root')!;
+    Object.defineProperties(scrollRoot, {
+      clientHeight: { configurable: true, value: 800 },
+      scrollHeight: { configurable: true, value: 12000 },
+    });
+    scrollRoot.addEventListener('scroll', () => {
+      setTimeout(() => {
+        scrollRoot.innerHTML = `
+          <div data-message-id="msg-1">
+            <p data-start="999">Expected behavior:</p>
+          </div>
+        `;
+      }, 200);
+    });
+
+    const resultPromise = jumpToBookmark(
+      makeBookmark({
+        dataStart: 999,
+        selectedText: null,
+        preview: 'Expected behavior:',
+        scrollY: 0,
+        scrollContainerTop: 7600,
+        messageOffsetY: 1200,
+        viewportFraction: 0.5,
+      }),
+      chatgptAdapter
+    );
+
+    await vi.advanceTimersByTimeAsync(300);
+    const result = await resultPromise;
+
+    expect(result).toBe(true);
+    expect(scrollRoot.scrollTop).toBe(7600);
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+    expect(window.scrollTo).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
   it('scrolls the saved message into view when there is no paragraph anchor to restore', async () => {
     document.body.innerHTML = `
       <div data-message-id="msg-1">

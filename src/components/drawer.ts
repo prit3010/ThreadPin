@@ -39,7 +39,7 @@ export interface DrawerOptions {
 }
 
 export interface DrawerAPI {
-  refresh(bookmarks: Bookmark[]): void;
+  refresh(bookmarks: Bookmark[], activeBookmarkId?: string | null): void;
   open(anchor?: DrawerAnchor): void;
   close(): void;
   unmount(): void;
@@ -65,6 +65,7 @@ export function mountDrawer(options: DrawerOptions): DrawerAPI {
 
   let disposed = false;
   let currentBookmarks: Bookmark[] = [];
+  let currentActiveBookmarkId: string | null = null;
   let filterValue = '';
   let lastAnchor: DrawerAnchor | null = null;
 
@@ -151,9 +152,10 @@ export function mountDrawer(options: DrawerOptions): DrawerAPI {
     drawer.classList.add('threadpin-drawer--closed');
   }
 
-  function renderList(bookmarks: Bookmark[]) {
+  function renderList(bookmarks: Bookmark[], activeBookmarkId: string | null = null) {
     if (!isCurrent()) return;
     currentBookmarks = bookmarks;
+    currentActiveBookmarkId = activeBookmarkId;
     count.textContent = `${bookmarks.length} saved`;
     list.innerHTML = '';
 
@@ -183,9 +185,10 @@ export function mountDrawer(options: DrawerOptions): DrawerAPI {
     list.appendChild(section);
 
     filtered.forEach((bookmark) => {
+      const isActive = bookmark.id === activeBookmarkId;
       const row = document.createElement('div');
       row.className = 'threadpin-drawer__row';
-      if (bookmarks.indexOf(bookmark) === 0) {
+      if (isActive) {
         row.classList.add('threadpin-drawer__row--active');
       }
 
@@ -196,7 +199,7 @@ export function mountDrawer(options: DrawerOptions): DrawerAPI {
       const meta = document.createElement('span');
       meta.className = 'threadpin-drawer__meta';
       meta.textContent =
-        bookmarks.indexOf(bookmark) === 0
+        isActive
           ? `${formatRelativeTime(bookmark.createdAt)} · active`
           : formatRelativeTime(bookmark.createdAt);
 
@@ -250,7 +253,7 @@ export function mountDrawer(options: DrawerOptions): DrawerAPI {
   filter.addEventListener('input', () => {
     if (!isCurrent()) return;
     filterValue = filter.value.trim();
-    renderList(currentBookmarks);
+    renderList(currentBookmarks, currentActiveBookmarkId);
   });
 
   minimizeBtn.addEventListener('click', () => {
@@ -268,9 +271,9 @@ export function mountDrawer(options: DrawerOptions): DrawerAPI {
   activeCleanup = cleanup;
 
   const api: DrawerAPI = {
-    refresh(bookmarks: Bookmark[]) {
+    refresh(bookmarks: Bookmark[], activeBookmarkId: string | null = currentActiveBookmarkId) {
       if (!isCurrent()) return;
-      renderList(bookmarks);
+      renderList(bookmarks, activeBookmarkId);
     },
     open: openDrawer,
     close: closeDrawer,

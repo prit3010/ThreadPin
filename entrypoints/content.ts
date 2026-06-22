@@ -1,5 +1,6 @@
 // entrypoints/content.ts
 import '../src/styles/content.css';
+import packageJson from '../package.json';
 import { getAdapter } from '../src/adapters/index';
 import { captureAnchor, createBookmark } from '../src/core/bookmarks';
 import { jumpToBookmark } from '../src/core/matching';
@@ -8,7 +9,8 @@ import {
   saveBookmark,
   deleteBookmark,
   getConversationBookmarks,
-  getActiveBookmark,
+  getActiveBookmarkId,
+  saveActiveBookmarkId,
   getThreadPinUiState,
   saveThreadPinUiState,
   getBookmarkHandlePosition,
@@ -48,12 +50,14 @@ function waitForAppReady(): Promise<void> {
 export default defineContentScript({
   matches: ['https://chatgpt.com/*', 'https://chat.openai.com/*', 'https://claude.ai/*'],
   async main() {
-    console.log('[ThreadPin] loaded');
+    const loadedAt = new Date().toISOString();
+    console.log(`[ThreadPin] loaded version=${packageJson.version} loadedAt=${loadedAt}`);
 
     await waitForAppReady();
 
     let currentConversationId: string | null = null;
     let currentBookmarkCount = 0;
+    let currentBookmarks: Bookmark[] = [];
     let activeBookmark: Bookmark | null = null;
     let uiState = await getThreadPinUiState();
     let dockFraction = await getBookmarkHandlePosition();
@@ -69,10 +73,18 @@ export default defineContentScript({
       },
       onJump: async (bookmark) => {
         await jumpAndToast(bookmark);
+        activeBookmark = bookmark;
+        await saveActiveBookmarkId(bookmark.conversationId, bookmark.id);
+        drawer.refresh(currentBookmarks, activeBookmark.id);
+        dock.refresh({ returnVisible: true });
         uiState = { ...uiState, drawerMode: 'closed' };
         await saveThreadPinUiState({ drawerMode: 'closed' });
       },
       onDelete: async (id) => {
+        if (activeBookmark?.id === id && currentConversationId) {
+          activeBookmark = null;
+          await saveActiveBookmarkId(currentConversationId, null);
+        }
         await deleteBookmark(id);
         await refreshConversationUi();
       },
@@ -107,6 +119,9 @@ export default defineContentScript({
       },
       onHideAll: async () => {
         drawer.close();
+        if (currentConversationId) {
+          await saveActiveBookmarkId(currentConversationId, null);
+        }
         activeBookmark = null;
         uiState = { ...uiState, dockHidden: true, drawerMode: 'closed' };
         await saveThreadPinUiState({ dockHidden: true, drawerMode: 'closed' });
@@ -149,6 +164,8 @@ export default defineContentScript({
       const bookmark = createBookmark(conversationId, url.hostname, anchor);
 
       await saveBookmark(bookmark);
+      activeBookmark = bookmark;
+      await saveActiveBookmarkId(bookmark.conversationId, bookmark.id);
       showToast('Bookmarked this spot.');
       await refreshConversationUi();
     }
@@ -159,11 +176,12 @@ export default defineContentScript({
       const conversationId = getConversationIdForRender(adapter, url);
       currentConversationId = conversationId;
       const bookmarks = await getConversationBookmarks(conversationId);
+      currentBookmarks = bookmarks;
       currentBookmarkCount = bookmarks.length;
-      drawer.refresh(bookmarks);
 
       if (uiState.dockHidden) {
         activeBookmark = null;
+        drawer.refresh(bookmarks, null);
         dock.refresh({
           bookmarkCount: currentBookmarkCount,
           hidden: true,
@@ -172,7 +190,19 @@ export default defineContentScript({
         return;
       }
 
-      activeBookmark = await getActiveBookmark(conversationId);
+      const activeStillExists =
+        activeBookmark?.conversationId === conversationId &&
+        bookmarks.some(bookmark => bookmark.id === activeBookmark?.id);
+      if (!activeStillExists) {
+        const activeBookmarkId = await getActiveBookmarkId(conversationId);
+        activeBookmark =
+          bookmarks.find(bookmark => bookmark.id === activeBookmarkId) ?? null;
+        if (activeBookmarkId && !activeBookmark) {
+          await saveActiveBookmarkId(conversationId, null);
+        }
+      }
+
+      drawer.refresh(bookmarks, activeBookmark?.id ?? null);
       dock.refresh({
         bookmarkCount: currentBookmarkCount,
         hidden: false,

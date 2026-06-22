@@ -146,6 +146,22 @@ describe('mountDrawer', () => {
     expect(document.body.textContent).toContain('Mutex read lock example');
   });
 
+  it('marks the selected active bookmark instead of always marking the newest row', () => {
+    const drawer = mountDrawer({ onJump: vi.fn(), onDelete: vi.fn() });
+
+    drawer.refresh([
+      makeBookmark({ id: 'newest', preview: 'Newest bookmark' }),
+      makeBookmark({ id: 'selected', preview: 'Selected bookmark' }),
+    ], 'selected');
+
+    const rows = Array.from(document.querySelectorAll('.threadpin-drawer__row'));
+    expect(rows).toHaveLength(2);
+    expect(rows[0].className).not.toContain('threadpin-drawer__row--active');
+    expect(rows[0].textContent).not.toContain('active');
+    expect(rows[1].className).toContain('threadpin-drawer__row--active');
+    expect(rows[1].textContent).toContain('active');
+  });
+
   it('shows a no-results state when filter matches no bookmarks', () => {
     const drawer = mountDrawer({ onJump: vi.fn(), onDelete: vi.fn() });
 

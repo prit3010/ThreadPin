@@ -24,7 +24,7 @@ export const chatgptAdapter: Adapter = {
   },
 
   getMessageContainerSelector(): string {
-    return '[data-message-id]';
+    return '[data-message-id], [data-testid^="conversation-turn-"]';
   },
 
   getParagraphSelector(): string {

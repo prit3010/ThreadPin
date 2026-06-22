@@ -44,8 +44,10 @@ describe('chatgptAdapter', () => {
     expect(chatgptAdapter.getStableConversationId?.(new URL('https://chatgpt.com/c/abc-123'))).toBe('chatgpt:abc-123');
   });
 
-  it('returns [data-message-id] as message container selector', () => {
-    expect(chatgptAdapter.getMessageContainerSelector()).toBe('[data-message-id]');
+  it('returns assistant and user turn message container selectors', () => {
+    expect(chatgptAdapter.getMessageContainerSelector()).toBe(
+      '[data-message-id], [data-testid^="conversation-turn-"]'
+    );
   });
 
   it('returns [data-start] as paragraph selector', () => {

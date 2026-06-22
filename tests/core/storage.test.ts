@@ -7,8 +7,10 @@ import {
   saveBookmark,
   deleteBookmark,
   getActiveBookmark,
+  getActiveBookmarkId,
   getBookmarkHandlePosition,
   getThreadPinUiState,
+  saveActiveBookmarkId,
   saveBookmarkHandlePosition,
   saveThreadPinUiState,
 } from '../../src/core/storage';
@@ -94,6 +96,19 @@ describe('storage', () => {
   it('getActiveBookmark returns null when no bookmarks exist', async () => {
     const active = await getActiveBookmark('chatgpt:nonexistent');
     expect(active).toBeNull();
+  });
+
+  it('saves and clears the active bookmark id per conversation', async () => {
+    await saveActiveBookmarkId('chatgpt:abc123', 'bookmark-1');
+    await saveActiveBookmarkId('chatgpt:xyz789', 'bookmark-2');
+
+    await expect(getActiveBookmarkId('chatgpt:abc123')).resolves.toBe('bookmark-1');
+    await expect(getActiveBookmarkId('chatgpt:xyz789')).resolves.toBe('bookmark-2');
+
+    await saveActiveBookmarkId('chatgpt:abc123', null);
+
+    await expect(getActiveBookmarkId('chatgpt:abc123')).resolves.toBeNull();
+    await expect(getActiveBookmarkId('chatgpt:xyz789')).resolves.toBe('bookmark-2');
   });
 
   it('saveBookmark prunes the oldest bookmark when conversation reaches 10', async () => {

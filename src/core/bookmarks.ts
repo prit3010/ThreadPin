@@ -1,4 +1,5 @@
 import type { Adapter, AnchorData, Bookmark } from './types';
+import { findNearestScrollContainer } from './scroll';
 
 export function captureAnchor(
   adapter: Adapter,
@@ -53,12 +54,25 @@ export function captureAnchor(
       messageId: '',
       dataStart: 0,
       scrollY,
+      scrollContainerTop: null,
+      messageOffsetY: null,
+      viewportFraction: getViewportFraction(viewportY),
       selectedText,
       preview: selectedText?.slice(0, 120) ?? '',
     };
   }
 
   const messageId = nearestContainer.getAttribute('data-message-id') ?? '';
+  const scrollContainer =
+    scroller instanceof HTMLElement
+      ? scroller
+      : findNearestScrollContainer(nearestContainer);
+  const messageRect = nearestContainer.getBoundingClientRect();
+  const messageOffsetY = clamp(
+    viewportY - messageRect.top,
+    0,
+    Math.max(0, messageRect.height)
+  );
 
   // Find the visible paragraph closest to the viewport center within that
   // message. If the current spot is a code block or another unanchored region,
@@ -75,9 +89,9 @@ export function captureAnchor(
     viewportY
   );
 
-  // null means no [data-start] paragraph was found (e.g. cursor is inside a
-  // code block or transiently unanchored text). jumpToBookmark will use text
-  // matching or scrollY for in-message positioning.
+  // null means no stable paragraph anchor was found (e.g. cursor is inside a
+  // code block or transiently unanchored text). New bookmarks still restore
+  // via text matching, messageOffsetY, or saved scroll-container position.
   const anchorElement = getAnchorElementForTextBlock(
     nearestTextBlock,
     nearestContainer,
@@ -89,11 +103,13 @@ export function captureAnchor(
     : NaN;
   const dataStart = Number.isFinite(parsedDataStart) ? parsedDataStart : null;
 
-  // Preview: prefer selection → nearest text block → nearest paragraph → container text (code block fallback)
+  // Preview: prefer selection → readable block around nearest anchor → container text.
+  // ChatGPT can put data-start on small inline fragments (for example a
+  // bold phrase), but the drawer preview should describe the surrounding line.
   const rawPreview =
     selectedText ||
-    nearestTextBlock?.textContent ||
-    nearestP?.textContent ||
+    getPreviewText(nearestTextBlock, nearestContainer) ||
+    getPreviewText(nearestP, nearestContainer) ||
     nearestContainer.textContent?.trim().slice(0, 120) ||
     '';
   const preview = rawPreview.trim().slice(0, 120);
@@ -102,6 +118,9 @@ export function captureAnchor(
     messageId,
     dataStart,
     scrollY,
+    scrollContainerTop: scrollContainer?.scrollTop ?? null,
+    messageOffsetY,
+    viewportFraction: getViewportFraction(viewportY),
     selectedText: selectedText ? selectedText.slice(0, 500) : null,
     preview,
   };
@@ -117,6 +136,16 @@ function getAnchorElementForTextBlock(
   return anchor && container.contains(anchor) ? anchor : null;
 }
 
+function getViewportFraction(viewportY: number): number | null {
+  if (!Number.isFinite(viewportY) || window.innerHeight <= 0) return null;
+  return clamp(viewportY / window.innerHeight, 0, 1);
+}
+
+function clamp(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return min;
+  return Math.min(max, Math.max(min, value));
+}
+
 function isVisibleInViewport(el: Element): boolean {
   const rect = el.getBoundingClientRect();
   return rect.bottom > 0 && rect.top < window.innerHeight;
@@ -127,6 +156,26 @@ function closestToViewportCenter(
   viewportY: number
 ): Element | null {
   return closestToViewportY(elements, viewportY);
+}
+
+function getPreviewText(
+  element: Element | null,
+  messageContainer: Element
+): string | null {
+  if (!element) return null;
+
+  if (element.closest('pre')) {
+    return element.textContent?.trim() || null;
+  }
+
+  const readableBlock = element.closest(
+    'p, li, pre, blockquote, h1, h2, h3, h4, h5, h6'
+  );
+  if (readableBlock && messageContainer.contains(readableBlock)) {
+    return readableBlock.textContent?.trim() || null;
+  }
+
+  return element.textContent?.trim() || null;
 }
 
 function closestToViewportY(
